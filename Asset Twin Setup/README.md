@@ -13,6 +13,10 @@ Creating an example Asset Twin is as easy as :
 
 Step by step instructions and details are included in [this document](docs/example_asset_twin)
 
+## Additional UI Navigator Component
+
+The Asset Twin configuration includes configuration for displaying an ipa-core pageComponent using the IafViewer for the 3D/2D building model. To use this component you will need to add it to your ipa-core application as described [here](../Asset%20Twin%20Components/Readme.md).
+
 ## COMING SOON - Understanding the Asset Twin
 
 Ready to take the next step and create your own Asset Twin?
