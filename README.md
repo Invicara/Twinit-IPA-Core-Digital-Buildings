@@ -1,1 +1,0 @@
-# Twinit-IPA-Core-Digital-Buildings
