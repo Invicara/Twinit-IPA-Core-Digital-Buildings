@@ -17,6 +17,6 @@ Step by step instructions and details are included in [this document](docs/examp
 
 Ready to take the next step and create your own Asset Twin?
 
-[Dive into the details](docs/example_asset_twin/start_here.md) of the Asset Twin data model and user interface configuration and scripting.
+[Dive into the details](docs/understanding_the_asset_twin/start_here.md) of the Asset Twin data model and user interface configuration and scripting.
 
 
