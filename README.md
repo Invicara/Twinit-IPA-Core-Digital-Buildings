@@ -15,3 +15,7 @@ This repository contains open-source code, pageComponents, scripts, configuratio
 Be sure to read the readme for each module for instructions on how to use it.
 
 ![Asset Twin Asset Info](./img/asset02.png)
+
+# Where to Start
+
+The best place to start is by using the [Asset Twin Setup](Asset%20Twin%20Setup/Readme.md) to re-create an example Asset Twin project.
