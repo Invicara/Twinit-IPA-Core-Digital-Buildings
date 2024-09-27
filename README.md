@@ -18,4 +18,4 @@ Be sure to read the readme for each module for instructions on how to use it.
 
 # Where to Start
 
-The best place to start is by using the [Asset Twin Setup](Asset%20Twin%20Setup/Readme.md) to re-create an example Asset Twin project.
+The best place to start is by using the [Asset Twin Setup](Asset%20Twin%20Setup/README.md) to re-create an example Asset Twin project.
