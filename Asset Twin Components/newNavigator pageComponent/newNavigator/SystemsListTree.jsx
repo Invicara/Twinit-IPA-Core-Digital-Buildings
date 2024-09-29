@@ -8,9 +8,9 @@ import {ReactiveTreeControl, AlertIndicator} from "@invicara/ipa-core/modules/Ip
 import './SystemsListTree.scss'
 import sortSystemElementIdsAsDisplayedInTree, {getElementId} from "../observability/sortSystemElements";
 import {useDispatch, useSelector} from "react-redux";
-import * as Systems from "../../redux/systems";
+import * as Systems from "../redux/systems";
 import Switch from "@material-ui/core/Switch/Switch";
-import {getFilteredSystemElementEntitiesBy, selectAppliedSystemElementIsolationFilters} from "../../redux/systems";
+import {getFilteredSystemElementEntitiesBy, selectAppliedSystemElementIsolationFilters} from "../redux/systems";
 
 const treeReducer = (state, action) => {
     switch (action.type) {

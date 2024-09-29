@@ -28,7 +28,7 @@ import clsx from "clsx";
 import { ScriptHelper } from "@invicara/ipa-core/modules/IpaUtils";
 import { AlertIndicator } from "@invicara/ipa-core/modules/IpaControls";
 import {useSelector} from "react-redux";
-import * as Systems from "../../redux/systems";
+import * as Systems from "../redux/systems";
 
 const groupAlertsReducer = (state, action) => {
     console.log("groupAlertsReducer")

@@ -39,9 +39,9 @@ import {EnhancedFetchControl, GroupAndFilterControl, ReactiveTreeControl} from "
 import {useNodeIndexFromGroupAndFilter} from "../systems/reactive-tree-control/useNodeIndexFromGroupAndFilter";
 import {
     setIsolatedSystemElementEntities,
-} from "../../redux/systems";
+} from "../redux/systems";
 import {Divider, List, ListItem, ListItemText} from "@material-ui/core";
-import * as Systems from "../../redux/systems";
+import * as Systems from "../redux/systems";
 import {SystemsListTree} from "./SystemsListTree";
 
 const SystemAlertsList = ({system}) => {
