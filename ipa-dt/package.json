@@ -1,7 +1,7 @@
 {
   "name": "ipa-dt",
-  "version": "0.8.0",
-  "description": "IPA Digital Twin",
+  "version": "2.3.0",
+  "description": "IPA-CORE Digital Twin",
   "homepage": "/digitaltwin",
   "type": "module",
   "scripts": {
@@ -12,7 +12,7 @@
     "test-prod": "NODE_OPTIONS=--max-old-space-size=2048 webpack serve --config webpack.prod.js --port 8083"
   },
   "keywords": [],
-  "author": "John Lynch <john.lynch@willyn.com>",
+  "author": "Invicara, Inc.",
   "dependencies": {
     "@dtplatform/iaf-doc-viewer": "~4.3.0",
     "@dtplatform/iaf-script-engine": "~4.3.0",
@@ -80,7 +80,7 @@
     "util": "^0.12.5",
     "vm-browserify": "^1.1.2"
   },
-  "license": "UNLICENSED",
+  "license": "APACHE 2.0",
   "devDependencies": {
     "@babel/cli": "^7.1.2",
     "@babel/core": "^7.1.2",
@@ -117,6 +117,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Invicara/ipa-dt.git"
+    "url": "https://github.com/Invicara/Twinit-IPA-Core-Digital-Buildings"
   }
 }
