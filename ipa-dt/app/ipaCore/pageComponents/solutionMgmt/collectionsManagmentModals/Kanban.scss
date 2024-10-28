@@ -1,0 +1,53 @@
+.Container {
+  display: grid;
+  grid-template-columns: repeat(3, 33%);
+}
+.TaskList {
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+  background: #f3f3f3;
+  border-radius: 5px;
+  padding: 15px 15px;
+  margin: 10px
+}
+.TaskColumnStyles {
+  margin: 8px;
+  display: flex;
+  width: 100%;
+  min-height: 80vh;
+}
+.Title{
+  padding: 2px 10px;
+  border-radius: 5px;
+  align-self: flex-start;
+}
+
+.apply-button-index {
+  background-color: #C71784;
+  color: white;
+  cursor: pointer;
+  height: 40px; 
+  border: solid #C71784;
+  border-radius: 4px;
+  padding: 8px 20px 8px 20px; 
+  text-transform: capitalize; 
+}
+
+.apply-button-index:hover {
+    background-color: #DF158C;
+    border: solid #DF158C;
+} 
+
+.cancel-button-index {
+  margin-right: 30px;
+  height: 40px; 
+  padding: 8px 20px 8px 20px; 
+  color: #C71784;
+  border: none;
+  background-color: white;
+}
+
+.cancel-button-index:hover {
+  background-color: #FAE5F3;
+}

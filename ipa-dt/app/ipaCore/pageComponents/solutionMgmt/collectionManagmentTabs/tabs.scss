@@ -1,0 +1,44 @@
+.dv-table-container {
+    display: flex;
+
+    h4 {
+      color: #C71784;
+    }
+
+    p {
+      margin-top: 16px;
+      width: 612px;
+    }
+
+    .dv-row1 {
+      width: 50%;
+
+      .upload-button {
+        margin: 60px 0px 40px 0px;
+      }
+
+      .dv-bottom-container {
+        border-top: 1px solid #DCDCDC;
+      }
+
+      .validation-error {
+        color: #D32F2F;
+        font-size: 20px;
+      }
+    }
+
+    .dv-row2 {
+      width: 50%;
+
+      .download-button {
+        margin-top: 60px; 
+      }
+    }
+    .dv-relate {
+      width: 25%;
+
+      .download-button {
+        margin-top: 60px; 
+      }
+    }
+  }

@@ -1,0 +1,7 @@
+# files/paths listed here will be ignored by semgrep (https://semgrep.dev/docs/)
+# format is the same as .gitignore and .dockerignore
+
+# sast, sbom files
+semgrep-results.xml
+semgrep-results.json
+bom.xml

@@ -1,0 +1,111 @@
+.actions-panel {
+
+    visibility: hidden;
+    height: 0px;
+    display: none;
+  
+    .inv-icon-svg {
+      width: 42px;
+      height: 42px;
+      display: inline-block;
+      background-size: 40px;
+      background-position: -1px;
+      background-repeat: no-repeat;
+  
+      &.inv-icon__masked {
+        width: 20px;
+        height: 20px;
+      }
+  
+    }
+  
+    .enabled{
+      background-color: var(--app-accent-color);
+    }
+    .disabled {
+      background-color: #B8B8B8;
+      cursor: initial;
+    }
+
+    .disabled:hover {
+      background-color: #B8B8B8 !important;
+      cursor: initial;
+    }
+
+    i {
+      margin: 8px 4px;
+      display: flex;
+      text-align: center;
+      align-items: center;
+      color: white;
+      cursor: pointer;
+      height: 40px; 
+      border-radius: 4px; 
+      padding: 8px 20px 8px 20px; 
+      text-transform: capitalize; 
+      white-space: nowrap;
+  
+      /*this is to style font icons, not svg*/
+      &:not(.inv-icon-svg).inv-icon__masked {
+        width: 20px;
+        height: 20px;
+        font-size: inherit;
+        margin: 0;
+        padding: 3px;
+        background-color: white;
+        color: var(--app-accent-color);
+      }
+  
+    }
+
+    @media (min-width: 1400px) {
+      visibility: visible;
+      display: flex;
+
+      i {
+        margin: 8px 0px 8px 8px;
+        display: flex;
+        text-align: center;
+        align-items: center;
+        color: white;
+        cursor: pointer;
+        height: 40px; 
+        border-radius: 4px; 
+        padding: 8px 20px 8px 20px; 
+        text-transform: capitalize; 
+        white-space: nowrap;
+    
+        /*this is to style font icons, not svg*/
+        &:not(.inv-icon-svg).inv-icon__masked {
+          width: 20px;
+          height: 20px;
+          font-size: inherit;
+          margin: 0;
+          padding: 3px;
+          background-color: white;
+          color: var(--app-accent-color);
+        }
+    
+      }
+      i:hover {
+        background-color: #DF158C;  
+      }
+
+    }
+
+    p {
+      padding-left: 10px;
+      margin: 0px;
+    }
+}
+
+.actions-dropdown {
+  display: flex;
+  justify-content: end;
+  visibility: visible;
+
+  @media (min-width: 1400px) {
+    visibility: hidden;
+    height: 0px;
+  }
+}
