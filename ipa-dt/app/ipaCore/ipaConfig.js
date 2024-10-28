@@ -1,7 +1,7 @@
 
 const ipaConfig = {
   appName: "",
-  applicationId: "0f02c817-8655-423e-9d22-5439187078f9",
+  applicationId: "",
   configUserType: 'ipa-dt',
   scriptPlugins: [
     "ipa-dt-script-plugins.js",
