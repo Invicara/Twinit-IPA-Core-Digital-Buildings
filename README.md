@@ -16,6 +16,18 @@ Be sure to read the readme for each module for instructions on how to use it.
 
 ![Asset Twin Asset Info](./img/asset02.png)
 
+## Contents
+
+### ipa-dt
+
+A full digital twin React web client application, ready to install and run. You must have knowledge of working with an ipa-core application, it's required user groups, user configs, and user config format in order use ipa-dt.
+
+### Asset Twin Setup
+
+A setup script for composing ad recomposing digital twins using ipa-dt.
+
 # Where to Start
 
-The best place to start is by using the [Asset Twin Setup](Asset%20Twin%20Setup/README.md) to re-create an example Asset Twin project.
+The best place to start is by leaning how to use the Twinit ipa-core React UI framework and setting up ad running ipa-dt.
+
+Then follow the documentation for the [Asset Twin Setup](Asset%20Twin%20Setup/README.md) to re-create an example Asset Twin project.
