@@ -1,0 +1,89 @@
+.telemetry-tree-panel, .telemetry-entity-panel {
+  margin-left:-30px;
+  margin-right:-30px;
+}
+
+.telemetry-tree-panel {
+
+  .title {
+    margin: 10px;
+    text-align: left;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 0;
+    color: #333333;
+    display: inline-block;
+  }
+
+  .telemetry-value {
+    float: right;
+    font-weight: bold;
+  }
+
+
+  .telemetry-tree-panel__control {
+    .MuiBox-root {
+      padding: 5px;
+    }
+  }
+
+  .telemetry-tree-panel__category, .telemetry-tree-panel__group {
+    padding: 0px 10px;
+  }
+
+}
+
+.navigator-view .css-ca0k19-container .css-1tm8zlz-control, .navigator-view .css-ca0k19-container .css-1ko4u72-control {
+  margin-bottom: 0px;
+}
+
+.spinningLoadingIcon {
+  top: 10%;
+  left: 50%;
+}
+
+
+.telemetry-chart-container {
+  position: relative;
+  padding: 0px 10px;
+}
+
+
+.telemetry-entity-select-form {
+  width: 100%;
+  background-color: var(--app-accent-color);
+
+
+  .MuiFilledInput-input {
+    padding: 10px 12px 10px;
+    color: white;
+    font-size: 14px;
+  }
+
+  .MuiSelect-icon {
+    color: white;
+  }
+
+  .MuiFilledInput-underline:before {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    content: "";
+    position: absolute;
+    transition: none;
+    border-bottom: none;
+    pointer-events: none;
+  }
+
+  .MuiPopover-paper {
+
+    li.MuiButtonBase-root.MuiListItem-root.MuiMenuItem-root.Mui-selected.MuiListItem-button.Mui-selected {
+      padding: 5px 15px;
+      background-color: var(--app-accent-color);
+    }
+
+
+  }
+
+
+}

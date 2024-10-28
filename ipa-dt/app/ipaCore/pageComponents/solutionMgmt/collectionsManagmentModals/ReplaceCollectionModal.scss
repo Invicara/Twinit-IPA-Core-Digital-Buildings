@@ -1,0 +1,71 @@
+.collection-name {
+    font-weight: 700;
+    margin-top: 16px;
+}
+
+.collection-not-compatible {
+    margin-top: 60px;
+    text-align: center;
+}
+
+.collection-not-compatible-message {
+    margin-top: 20px;
+    display: flex; 
+    justify-content: space-evenly;
+}
+
+.upload-text {
+    color: #C71784; 
+    margin-top: 32px;
+}
+
+.browse-button {
+    border: solid 1px #B8B8B8;
+    border-radius: 4px;
+    background-color: white;
+    width: 165px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.browse-button:hover {
+    border: 1px solid #C71784;
+}
+
+.button-text {
+    color: #5D5D5D;
+    margin-top: 10px;
+}
+
+.upload-actions {
+    display: flex; 
+    margin-top: 15px;
+}
+
+.file-icon {
+    margin-right: 10px; 
+    color: #C71784;
+}
+
+.selected-file {
+    margin-left: 25px; 
+    display: flex; 
+    align-items: center;
+}
+
+.cancel-icon {
+    color: #C62828; 
+    cursor: pointer
+}
+
+.no-file-selected {
+    color: #5D5D5D;
+}
+
+.action-buttons {
+    margin-top: 66px;
+    display: flex; 
+    justify-content: end; 
+}

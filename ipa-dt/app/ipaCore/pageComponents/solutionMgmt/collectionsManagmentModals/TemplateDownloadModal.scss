@@ -1,0 +1,50 @@
+.template-download-modal {
+
+    .template-list {
+      margin-left: 10px;
+    }
+
+    .scroll {
+      height: 350px;
+      overflow-x: hidden;
+      overflow-y: auto;
+
+      .radio-buttons {
+        display: flex;
+        margin-top: 25px;
+        cursor: pointer;
+      }
+    }
+
+    ::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background-color: #F9F9F9;
+      border-radius: 5px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #C71784;
+      border-radius: 5px;
+    }
+  }
+
+  .template-action-buttons {
+    margin-top: 16px;
+    display: flex;
+    width: 100%;
+    position: absolute;
+    right: 3px;
+
+    .column-1 {
+      width: 60%;
+    }
+
+    .column-2 {
+      width: 100%;
+      display: flex;
+      justify-content: end;;
+    }
+  }
