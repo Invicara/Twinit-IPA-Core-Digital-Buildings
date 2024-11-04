@@ -27,4 +27,4 @@ Example of Asset Entity object:
 }
 ```
 ### Entity properties
-More information on properties can be found [here](./data_types/properties.md).
+More information on properties can be found [here](./properties.md).
