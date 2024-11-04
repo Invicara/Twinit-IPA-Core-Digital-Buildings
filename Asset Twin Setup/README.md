@@ -21,6 +21,6 @@ The Asset Twin configuration includes configuration for displaying an ipa-core p
 
 Ready to take the next step and create your own Asset Twin?
 
-[Dive into the details](../docs/understanding_the_asset_twin/data_model.md) of the Asset Twin data model and user interface configuration and scripting.
+[Dive into the details](../docs/understanding_the_asset_twin/README.md) of the Asset Twin data model and user interface configuration and scripting.
 
 
