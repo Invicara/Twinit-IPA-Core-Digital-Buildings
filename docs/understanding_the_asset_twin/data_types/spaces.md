@@ -8,7 +8,6 @@ Each Space is related to a Space collection. Each Space also has a direct relati
 
 ###  JSON data structure of a Space collection object
 ```json
-{
  {
     "_uri": <namedUserItem uri>,
     "_name": <name of the collection>,
@@ -27,7 +26,6 @@ Each Space is related to a Space collection. Each Space also has a direct relati
     "_description": <collection description>,
     "_kind": <type of namedUserItem>
  }
-}
 ```
 
 ###  JSON data structure of a Space item object
