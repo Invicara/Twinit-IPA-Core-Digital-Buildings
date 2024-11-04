@@ -17,10 +17,10 @@ Step by step instructions and details are included in [this document](docs/examp
 
 The Asset Twin configuration includes configuration for displaying an ipa-core pageComponent using the IafViewer for the 3D/2D building model. To use this component you will need to add it to your ipa-core application as described [here](../Asset%20Twin%20Components/Readme.md).
 
-## COMING SOON - Understanding the Asset Twin
+## Understanding the Asset Twin
 
 Ready to take the next step and create your own Asset Twin?
 
-[Dive into the details](docs/understanding_the_asset_twin/start_here.md) of the Asset Twin data model and user interface configuration and scripting.
+[Dive into the details](../docs/understanding_the_asset_twin/data_model.md) of the Asset Twin data model and user interface configuration and scripting.
 
 
