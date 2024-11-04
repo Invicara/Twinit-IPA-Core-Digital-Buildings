@@ -41,6 +41,6 @@ Each Space is related to a Space collection. Each Space also has a direct relati
 
 
 ### Space properties
-More information on properties can be found [here](./data_types/properties.md).
+More information on properties can be found [here](./properties.md).
 
 <!---  Do I need to explain how the 'importModeledSpaces' script works and how we can edit it along with the .xlsx file to add in custom properties? -->
