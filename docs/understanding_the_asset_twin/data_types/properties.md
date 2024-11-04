@@ -60,5 +60,6 @@ Each property can have any one of the below property types:
 
 Please refer to the [Digital_Buildings_Workflow_Document.pdf](../../example_asset_twin/Digital_Buildings_Workflow_Document.pdf) example to learn about how to add property types to a property using the `config_sheet.xlsx`.
 
->When assigning the `date` or `datetime` property types, we must add a unit to the `uom` (Unit of Measurement) column. For `date`, you must add a date format such as `mm/dd/yyyy`. 
->![properties example](../../../img/properties_example.png)
+>When assigning the `date` or `datetime` property types, we must add a unit to the `uom` (Unit of Measurement) column. For `date`, you must add a date format such as `mm/dd/yyyy` as shown in the example below. 
+
+![properties example](../../../img/properties_example.png)
