@@ -27,8 +27,8 @@ Each link below will give more detail as to what that data type is, how it is st
 ## Model import orchestrator
 In order to learn more about the Model Import process, please review section '06- Datasources Service Overview and Model Import' of the 'How to Build an App on Twinit (Advanced) v2.0' course on [academy.twinit.io](https://academy.twinit.io/) where you can find a detailed explanation of how datascources and the Model Import process operates.
 
-:::note
-One of the steps of the Orchestrator scripts is to migrate relations to the model. This script checks to see if there is a previous version of the model present and if that pervious version has any relations from model elements to DT spaces or DT assets. If so, it attempts to recreate the same relations on the new version of the model.
-:::
+
+>One of the steps of the Orchestrator scripts is to migrate relations to the model. This script checks to see if there is a previous version of the model present and if that pervious version has any relations from model elements to DT spaces or DT assets. If so, it attempts to recreate the same relations on the new version of the model.
+
 
 <!---  Note that the above has the extra step that will migrate relations to the model (explain this). We don't need to explain how the script works, just that this logic to do that is in this script and is used by this orchestrator -->

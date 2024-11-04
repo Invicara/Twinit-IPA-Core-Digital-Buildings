@@ -1,8 +1,6 @@
 # Undersanding Properties
 
-:::note
-There are no predefined properties for data types. It is up to the developer to add in whichever properties make sense for their version of that data type.
-:::
+>There are no predefined properties for data types. It is up to the developer to add in whichever properties make sense for their version of that data type.
 
 The below table will display the different property keys we can assign to a property object.
 <table>
@@ -62,7 +60,5 @@ Each property can have any one of the below property types:
 
 Please refer to the [Digital_Buildings_Workflow_Document.pdf](../../example_asset_twin/Digital_Buildings_Workflow_Document.pdf) example to learn about how to add property types to a property using the `config_sheet.xlsx`.
 
-:::note
-When assigning the `date` or `datetime` property types, we must add a unit to the `uom` (Unit of Measurement) column. For `date`, you must add a date format such as `mm/dd/yyyy`. 
+>When assigning the `date` or `datetime` property types, we must add a unit to the `uom` (Unit of Measurement) column. For `date`, you must add a date format such as `mm/dd/yyyy`. 
 ![properties example](../../../img/properties_example.png)
-:::
