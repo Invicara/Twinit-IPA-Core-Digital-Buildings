@@ -4,7 +4,6 @@ Spaces are a bondable region such as a room or an area. Space collections have a
 
 ### Relations
 Each Space is related to a Space collection. Each Space also has a direct relation to an Asset that is contained in that space.
-<!--- NOTE Would this be better as a table? NOTE --> 
 
 ###  JSON data structure of a Space collection object
 ```json
@@ -40,5 +39,3 @@ Each Space is related to a Space collection. Each Space also has a direct relati
 
 ### Space properties
 More information on properties can be found [here](./properties.md).
-
-<!---  Do I need to explain how the 'importModeledSpaces' script works and how we can edit it along with the .xlsx file to add in custom properties? -->
