@@ -6,7 +6,7 @@ File Attributes are extra information that we can assoicate with a file. Once a 
 {
  "_uri": <uri>,
  "_name": <collection name>,
- "_userType": "iaf_cde_file_attrib_coll",
+ "_userType": <userType>,
  "_tipId": <tipid>,
  "_versions": [<array of versions>],
  "_irn": <irn>,
@@ -17,7 +17,7 @@ File Attributes are extra information that we can assoicate with a file. Once a 
  "_versionsCount": <number of versions>,
  "_itemClass": <itemClass>,
  "_userItemId": <user item id>,
- "_id": "<colleciton id",
+ "_id": <colleciton id>,
  "_description": <collection description>,
  "_metadata": {<metadata>},
  "_kind": <kind>
