@@ -11,7 +11,7 @@ Creating an example Asset Twin is as easy as :
 3. Creating a new Twinit project
 4. And running a setup script!
 
-Step by step instructions and details are included in [this document](../docs/example_asset_twin!
+Step by step instructions and details are included in [this document](../docs/understanding_the_asset_twin/Digital_Buildings_Workflow_Document.pdf)
 )
 
 ## Additional UI Navigator Component
