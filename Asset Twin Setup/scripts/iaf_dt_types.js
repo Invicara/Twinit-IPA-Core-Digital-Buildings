@@ -26,6 +26,33 @@ let types = {
         })
         return distinctCatsWithTypeCount
     },
+    async getCategoriesWithCountSgpk(input, libraries, ctx) {
+        let { PlatformApi } = libraries
+        let iaf_asset_collection = await PlatformApi.IafScriptEngine.getVar('iaf_asset_collection')
+        let distinctCats = await PlatformApi.IafScriptEngine.getDistinct({
+            collectionDesc: { _userType: iaf_asset_collection._userType, _id: iaf_asset_collection._id },
+            field: "properties.Category.val",
+            query: {}
+        }, ctx)
+        //check this
+        distinctCats = _.sortBy(distinctCats, cat => cat._id)
+        let distinctCatWithTypeCountQuery = distinctCats.map(cat => {
+            return {
+                _userItemId: iaf_asset_collection._id,
+                query: { "properties.Category.val": cat },
+                options: { page: { _pageSize: 0, getPageInfo: true } }
+            }
+        })
+        let catsPageInfo = await PlatformApi.IafScriptEngine.getItemsMulti(distinctCatWithTypeCountQuery, ctx);
+        let distinctCatsWithPageInfo = _.zip(distinctCats, catsPageInfo)
+        let distinctCatsWithTypeCount = distinctCatsWithPageInfo.map(catWithPage => {
+            return {
+                name: catWithPage[0],
+                childCount: catWithPage[1]._total
+            }
+        })
+        return distinctCatsWithTypeCount
+    },
     async getArchieveTypesWithCount(input, libraries, ctx) {
         console.log("input", input)
         let { PlatformApi } = libraries
@@ -73,6 +100,42 @@ let types = {
                 query: {
                     'properties.dtCategory.val': input.input.dtCategory,
                     'properties.dtType.val': type
+                },
+                options: { page: { _pageSize: 0, getPageInfo: true } }
+            }
+        })
+        console.log('distinctTypestWithChildCountQuery', distinctTypestWithChildCountQuery)
+        let typesPageInfo = await PlatformApi.IafScriptEngine.getItemsMulti(distinctTypestWithChildCountQuery, ctx);
+
+        console.log('typesPageInfo', typesPageInfo)
+        let distinctTypesWithPageInfo = _.zip(distinctTypes, typesPageInfo)
+        console.log('distinctTypesWithPageInfo', distinctTypesWithPageInfo)
+
+        let distinctTypesWithChildrenCount = distinctTypesWithPageInfo.map(typeWithpage => {
+            return {
+                name: typeWithpage[0],
+                childCount: typeWithpage[1]._total
+            }
+        })
+        console.log('distinctTypesWithChildrenCount', distinctTypesWithChildrenCount)
+        return distinctTypesWithChildrenCount
+    },
+    async getTypesWithChildrenCountSgpk(input, libraries, ctx, callback) {
+        console.log("input", input)
+        let { PlatformApi } = libraries
+        let iaf_asset_collection = await PlatformApi.IafScriptEngine.getVar('iaf_asset_collection')
+        let distinctTypes = await PlatformApi.IafScriptEngine.getDistinct({
+            collectionDesc: { _userType: iaf_asset_collection._userType, _id: iaf_asset_collection._id },
+            field: 'properties.Type.val',
+            query: { "properties.Category.val": input.input.Category }
+        }, ctx)
+        console.log('distinctTypes', distinctTypes)
+        let distinctTypestWithChildCountQuery = distinctTypes.map(type => {
+            return {
+                _userItemId: iaf_asset_collection._id,
+                query: {
+                    'properties.Category.val': input.input.Category,
+                    'properties.Type.val': type
                 },
                 options: { page: { _pageSize: 0, getPageInfo: true } }
             }

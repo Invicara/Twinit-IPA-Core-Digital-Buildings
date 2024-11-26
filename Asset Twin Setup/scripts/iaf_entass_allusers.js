@@ -238,6 +238,32 @@ let entass = {
 
         return asset
     },
+    async getAssetFromModelSgpk(input, libraries, ctx, callback) {
+        console.log('inputgetAssetFromModel', input)
+        const { IafScriptEngine } = libraries.PlatformApi
+        let iaf_asset_collection = IafScriptEngine.getVar('iaf_asset_collection')
+        console.log(iaf_asset_collection, _.trim(input.modelInfo.id))
+        let asset_query = {
+            query: { "properties.ItemGUID.val": _.trim(input.modelInfo.id) },
+            collectionDesc: { _userType: iaf_asset_collection._userType, _userItemId: iaf_asset_collection._userItemId },
+            options: { page: { getAllItems: true } }
+        }
+        let queryResults = await IafScriptEngine.getItems(asset_query, ctx)
+        console.log('queryResults', queryResults)
+        let asset = null
+        if (queryResults.length > 0) {
+            asset = queryResults.map(asset => {
+                return {
+                    _id: asset._id,
+                    "Entity Name": asset['Asset Name'],
+                    properties: asset.properties,
+                    modelViewerIds: [asset.properties.ItemGUID.val],
+                }
+            })[0]
+        }
+        console.log('asset', asset)
+        return asset
+    },
     async editAsset(input, libraries, ctx) {
         let { PlatformApi, UiUtils } = libraries
         let iaf_asset_collection = PlatformApi.IafScriptEngine.getVar('iaf_asset_collection')
