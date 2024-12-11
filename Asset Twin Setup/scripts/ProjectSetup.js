@@ -1,6 +1,6 @@
 
 let RunnableScripts = [
-	{ name: "One Click Project Setup", script: "oneClickSetup" }
+	{ name: "Easy Asset Twin Setup", script: "easyAssetTwinSetup" }
 ]
 
 import fs from 'fs'
@@ -20,1239 +20,7 @@ const LIB = {
 	xlsConfigDataParsed: null,
   };
 
-  const CONFIGVARS = {}
-
-async function scriptList(){
-	try{
-	let { IafItemSvc } = LIB.PlatformApi
-	let loadedScripts = await IafItemSvc.getNamedUserItems({
-		"query": {}
-	}, LIB.ctx, {});
-	LIB.scriptAvailable = loadedScripts._list
-	return LIB.scriptAvailable
-    } catch(e){
-		console.error('Something went Wrong!', e)
-	}
-}
-
-async function selectConfigSheet() {
-	try{
-	console.log('Please upload config sheet.')
-	let xlsxFiles = await LIB.UiUtils.IafLocalFile.selectFiles({ multiple: false, accept: ".xlsx" })
-	//console.log(xlsxFiles,'xlsxFiles')
-	let typeWorkbook = await LIB.UiUtils.IafDataPlugin.readXLSXFiles(xlsxFiles)
-	let wbJSON = LIB.UiUtils.IafDataPlugin.workbookToJSON(typeWorkbook[0])
-	LIB.wbJSON = wbJSON
-	let xlsConfigData = wbJSON.Config
-	LIB.xlsConfigDataParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsConfigData })
-	} catch(e){
-		console.error('Something went Wrong!', e)
-	}
-}
-async function createUserGroups() {
-
-
-	let res
-	try {
-		res = await LIB.PlatformApi.IafProj.addUserGroups(LIB.proj, CONFIGVARS.userGroupDescriptors, LIB.ctx);
-	} catch (e) {
-		res = undefined;
-		throw e;
-	}
-
-	return res
-}
-async function userConfigsLoader() {
-
-	try{
-	const delay = (ms, value) =>
-		new Promise(resolve => setTimeout(resolve, ms, value));
-
-	async function childFunction() {
-		return await Promise.all([getUserGroupsFetchDelay()]);
-	}
-
-	async function getUserGroupsFetchDelay() {
-		const result = await delay(15000, "true");
-
-		let userGroups = await LIB.PlatformApi.IafProj.getUserGroups(LIB.proj, LIB.ctx)
-		console.log(userGroups, "userGroups-configloader-insidesomefunction")
-
-		if (userGroups?.length > 0) {
-			console.log(result);
-			return result;
-		}
-	}
-
-
-	async function main() {
-		const result = await childFunction();
-		console.log(result, "final_result")
-		if (result[0] === "true") {
-
-			let userGroups = await LIB.PlatformApi.IafProj.getUserGroups(LIB.proj, LIB.ctx)
-			console.log(userGroups, "userGroups-configloader-insidemainfunc")
-
-			//load content of the user configs 
-			let parsed = CONFIGVARS.configContents.map(x => JSON.parse(x))
-			let configs = _.zip(CONFIGVARS.configNames, parsed)
-			console.log(configs, "configs-configloader")
-			let configDefs = _.map(configs, (c) => {
-				return { configName: c[0], configContent: c[1] }
-			})
-
-			//create configItems
-			let configItems = []
-			configDefs.forEach((c) => {
-				let item = _.find(CONFIGVARS.userConfigDescriptors, { _shortName: c.configName })
-				if (item) {
-					item._version = { _userData: JSON.stringify(c.configContent, null, 2) }
-					configItems.push(item)
-				}
-			})
-			console.log(configItems, "configItems-configloader")
-
-
-			let groupItems = []
-
-			configDefs.forEach((c) => {
-				let group = _.find(CONFIGVARS.userConfigToUserGroupMap, { userConfig: c.configName })
-				console.log(group, "group")
-				let item = _.find(userGroups, { _shortName: group.userGroup })
-				console.log(item, "item-config")
-				if (item) {
-					groupItems.push(item)
-				}
-			})
-			console.log(groupItems, "groupItems-configloader")
-
-
-			//Look up the UserGroup mapped to each UserConfig
-
-
-			let configsAndGroups = _.zip(configItems, groupItems)
-			console.log(configsAndGroups, "configsAndGroups-configloader")
-			let configsAndGroupDefs = _.map(configsAndGroups, (c) => {
-				return { userConfig: c[0], userGroup: c[1] }
-			})
-			console.log(configsAndGroupDefs, "configsAndGroupDefs-configloader")
-			let results = []
-
-			//Do not use forEach as it is not Promise aware!
-			for (let i = 0; i < configsAndGroupDefs.length; i++) {
-				let result = await LIB.PlatformApi.IafUserGroup.addUserConfigs(configsAndGroupDefs[i].userGroup, [configsAndGroupDefs[i].userConfig], LIB.ctx);
-				if (result && result._list) {
-					result = result._list;
-				}
-				results.push(result);
-			}
-			console.log(results, "results-configloader")
-			return results
-		}
-	}
-
-	main();
-    } catch(e){
-		throw e
-	}
-
-}
-async function setLocalScriptPath(){
-	try{
-	let localAddr = _.get(LIB.wbJSON, "Path");
-	LIB.localScriptPath = localAddr === undefined ? [] : localAddr[1]
-	return LIB.localScriptPath;
-	} catch(e){
-		throw e
-	}
-}
-async function isUserGroupAvailable() {
-	try{
-	let userGroups = LIB.xlsConfigDataParsed.map(user => user.UserGroupName)
-	if (isScriptExists("iaf_dbm_soladmin_uc")) {
-		CONFIGVARS.userGroupDescriptors.push(CONFIGVARS.solutionAdmin)
-		CONFIGVARS.userConfigDescriptors.push(CONFIGVARS.userConfigSolutionAdmin)
-		CONFIGVARS.userConfigToUserGroupMap.push(CONFIGVARS.userConfigToUserGroupMapSolAdmin)
-		let findUser = [
-			{
-				"UserGroup": "Project Admin",
-				"UserGroupName": "Solution Admin",
-				"Assets": "Yes",
-				"Spaces": "Yes",
-				"Files": "Yes",
-				"ModelElements": "Yes",
-				"Collections": "Yes",
-				"BIMPK Upload": "Yes",
-				"SGPK Upload": "No",
-				"Navigator": "Yes"
-			}
-		]
-		await loadScripts(findUser)
-		Object.assign(CONFIGVARS.updateUserConfigContent,
-			{
-				handlers: {
-					...CONFIGVARS.updateUserConfigContent.handlers,
-					modelVer: CONFIGVARS.handlerManageModel.handler.modelVer
-				}
-			},
-			{
-				groupedPages: {
-					...CONFIGVARS.updateUserConfigContent.groupedPages,
-					Admin: CONFIGVARS.groupedPagesAdmin.groupedPages.Admin,
-				}
-			})
-		CONFIGVARS.updateUserConfigContent.groupedPages["Admin"].pages.push(CONFIGVARS.groupedPagesAdminUsergrp)
-		CONFIGVARS.updateUserConfigContent.groupedPages["Admin"].pages.push(CONFIGVARS.groupedPagesAssetTwinManageModel)
-
-		CONFIGVARS.configNames.push("iaf_dbm_soladmin_uc")
-		CONFIGVARS.configContents.push(JSON.stringify(CONFIGVARS.updateUserConfigContent))
-		CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages = []
-		Object.assign(CONFIGVARS.updateUserConfigContent, CONFIGVARS.resetUserConfigContent)
-	}
-	if (userGroups.includes("Project Admin") && isScriptExists("iaf_dbm_projadmin_uc")) {
-		CONFIGVARS.userGroupDescriptors.push(CONFIGVARS.projectAdmin)
-		CONFIGVARS.userConfigDescriptors.push(CONFIGVARS.userConfigProjectAdmin)
-		CONFIGVARS.userConfigToUserGroupMap.push(CONFIGVARS.userConfigToUserGroupMapProjAdmin)
-		let findUser = LIB.xlsConfigDataParsed.filter(x => x.UserGroupName == "Project Admin")
-		console.log(findUser, "finduser-projectAdmin")
-		await loadScripts(findUser)
-		Object.assign(CONFIGVARS.updateUserConfigContent,
-			{
-				handlers: {
-					...CONFIGVARS.updateUserConfigContent.handlers,
-					modelVer: CONFIGVARS.handlerManageModel.handler.modelVer
-				}
-			},
-			{
-				groupedPages: {
-					...CONFIGVARS.updateUserConfigContent.groupedPages,
-					Admin: CONFIGVARS.groupedPagesAdmin.groupedPages.Admin,
-				}
-			})
-		if (CONFIGVARS.updateUserConfigContent.groupedPages["Admin"].pages.length === 0) {
-			CONFIGVARS.updateUserConfigContent.groupedPages["Admin"].pages.push(CONFIGVARS.groupedPagesAdminUsergrp)
-			CONFIGVARS.updateUserConfigContent.groupedPages["Admin"].pages.push(CONFIGVARS.groupedPagesAssetTwinManageModel)
-		}
-		CONFIGVARS.configNames.push("iaf_dbm_projadmin_uc")
-		CONFIGVARS.configContents.push(JSON.stringify(CONFIGVARS.updateUserConfigContent))
-		CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages = []
-		Object.assign(CONFIGVARS.updateUserConfigContent, CONFIGVARS.resetUserConfigContent)
-	}
-	if (userGroups.includes("Project User") && isScriptExists("iaf_dbm_projuser_uc")) {
-		CONFIGVARS.userGroupDescriptors.push(CONFIGVARS.projectUser)
-		CONFIGVARS.userConfigDescriptors.push(CONFIGVARS.userConfigProjectUser)
-		CONFIGVARS.userConfigToUserGroupMap.push(CONFIGVARS.userConfigToUserGroupMapProjUser)
-		let findUser = LIB.xlsConfigDataParsed.filter(x => x.UserGroupName == "Project User")
-		console.log(findUser, "finduser-projectUser")
-		await loadScripts(findUser)
-		CONFIGVARS.configNames.push("iaf_dbm_projuser_uc")
-		CONFIGVARS.configContents.push(JSON.stringify(CONFIGVARS.updateUserConfigContent))
-		CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages = []
-		Object.assign(CONFIGVARS.updateUserConfigContent, CONFIGVARS.resetUserConfigContent)
-	}
-	if (userGroups.includes("Project Visitor") && isScriptExists("iaf_dbm_visitor_uc")) {
-		CONFIGVARS.userGroupDescriptors.push(CONFIGVARS.projectVisitor)
-		CONFIGVARS.userConfigDescriptors.push(CONFIGVARS.userConfigProjectVisitor)
-		CONFIGVARS.userConfigToUserGroupMap.push(CONFIGVARS.userConfigToUserGroupMapProjVisitor)
-		let findUser = LIB.xlsConfigDataParsed.filter(x => x.UserGroupName == "Project Visitor")
-		console.log(findUser, "finduser")
-		await loadScripts(findUser)
-		CONFIGVARS.configNames.push("iaf_dbm_visitor_uc")
-		CONFIGVARS.configContents.push(JSON.stringify(CONFIGVARS.updateUserConfigContent))
-		CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages = []
-		Object.assign(CONFIGVARS.updateUserConfigContent, CONFIGVARS.resetUserConfigContent)
-	}
-    } catch(e){
-		throw e
-	}
-}
-async function scriptsLoader() {
-
-	try{
-	let scripts = _.zip(Array.from(CONFIGVARS.scriptNames), CONFIGVARS.scriptContents)
-	console.log(scripts, "scripts")
-
-	let scriptDefs = _.map(scripts, (s) => {
-		return { scriptName: s[0], scriptContent: s[1] }
-	})
-	console.log(scriptDefs, "scriptDefs")
-
-	let scriptItems = []
-	scriptDefs.forEach((c) => {
-		let item = _.find(CONFIGVARS.scriptsDescriptors, { _shortName: c.scriptName })
-		if (item) {
-			item._version = { _userData: c.scriptContent };
-			item._namespaces = LIB.proj._namespaces
-			scriptItems.push(item)
-		}
-	})
-
-	console.log(scriptItems, "scriptItems")
-	let results = await LIB.PlatformApi.IafScripts.create(scriptItems, LIB.ctx);
-	console.log(results, "results")
-	if (results && results._list) {
-		results = results._list;
-	}
-	console.log(results, "inside-scriptloader")
-
-	return results
-	} catch(e){
-		throw e
-	}
-}
-async function createOrRecreateBIMPKOrSgpkDatasource(bimpkOrSgpk) {
-
-	try{
-		let bimpkOrSgpkCapital = bimpkOrSgpk.toUpperCase()
-		const query = {
-		  _namespaces: LIB.proj._namespaces,
-		  _userType: bimpkOrSgpk + "_uploader"
-		};
-	
-		const datasources = await LIB.IafScriptEngine.getDatasources(query, LIB.ctx);
-	
-		const filteredDatasources = _.filter(datasources, d => d._userType === bimpkOrSgpk + "_uploader"
-		  && d._name === bimpkOrSgpkCapital + " Uploader");
-	
-		_.each(filteredDatasources, async datasource => await LIB.IafScriptEngine.removeDatasource({ orchId: datasource.id }, LIB.ctx));
-	
-		let datasourceResult = await LIB.IafScriptEngine.addDatasource(
-			{
-				_name: bimpkOrSgpk + " Uploader",
-				_description: bimpkOrSgpkCapital + " Uploader",
-				_namespaces: LIB.proj._namespaces,
-				_userType: bimpkOrSgpk + "_uploader",
-				_schemaversion: "2.0",
-				_params: {
-					tasks: [
-						{
-							"name": "default_script_target",
-							"_actualparams": {
-								"userType": "iaf_import_model",
-								"_scriptName": "importModel"
-							},
-							"_sequenceno": 1
-						}
-					]
-				}
-			}, LIB.ctx
-		)
-		return datasourceResult;
-	} catch(e){
-		throw e
-	}
-}
-
-async function createOrRecreateColl(name, shortName, description, userType){
-	try{
-	return await LIB.IafScriptEngine.createOrRecreateCollection(
-		{
-			_name: name,
-			_shortName: shortName,
-			_namespaces: LIB.proj._namespaces,
-			_description: description,
-			_userType: userType
-		}, LIB.ctx)
-	} catch(e){
-		throw e
-	}
-}
-
-async function createItemsLot(userItemId, dataObjects){
-	try{
-		return await LIB.IafScriptEngine.createItemsBulk({
-			_userItemId: userItemId,
-			_namespaces: LIB.proj._namespaces,
-			items: dataObjects
-		}, LIB.ctx)
-	} catch(e){
-		throw e
-	}
-}
-
-async function createOrRecreateIndexes(id,keys,optionName) {
-	try{
-		return await LIB.IafScriptEngine.createOrRecreateIndex(
-			{
-				_id: id,
-				indexDefs: [
-					{
-						key: keys,
-						options: {
-							"name": optionName + "_search_index",
-							"default_language": "english"
-						}
-					}
-				]
-			}, LIB.ctx
-		)
-	} catch(e){
-		throw e
-	}
-}
-
-async function typeMapLoader() {
-
-	try{
-	const bimTypeCollection = _.get(LIB.wbJSON, "Bim Type");
-	if(checkImportListAccess('BimType') && bimTypeCollection){
-		const bimTypeCollection_data_objects = LIB.UiUtils.IafDataPlugin.parseGridData(
-			{ gridData: bimTypeCollection });
-			console.log(bimTypeCollection_data_objects, "bimTypeCollection_data_objects")
-
-			let atm_defs_coll = await createOrRecreateColl('ATM Def Collection','typemap_defs','Asset Type Map Collection','iaf_dt_type_map_defs_coll')
-			console.log("Type Map Collection", atm_defs_coll)
-		
-			let atm_defs_items_res = await createItemsLot(atm_defs_coll._userItemId, bimTypeCollection_data_objects)
-		
-			return atm_defs_items_res
-	} else {
-		console.log("Bim Type Sheet Tab Missing!");
-	}
-	} catch(e){
-		throw e
-	}
-}
-
-async function setupCDELoader() {
-
-	try{
-	const documentAttributeCollections = _.get(LIB.wbJSON, "Document Attributes");
-	if(checkImportListAccess('DocumentAttributes') && documentAttributeCollections){
-		console.log(documentAttributeCollections, "documentAttributeCollections")
-		let documentAttributeCollections_as_objects = LIB.UiUtils.IafDataPlugin.parseGridData(
-			{ gridData: documentAttributeCollections, options: { asColumns: true } })
-		console.log(documentAttributeCollections_as_objects, "documentAttributeCollections_as_objects")
-		
-		let file_attrib_coll = await createOrRecreateColl("FDM File Attrib Collection","devConfigfileattrib","FDM File Attribute Collection","iaf_cde_file_attrib_coll")
-	
-		console.log("file_attrib_coll", file_attrib_coll)
-	
-		let file_attribs = await LIB.IafScriptEngine.createItems({
-			_userItemId: file_attrib_coll._userItemId,
-			_namespaces: LIB.proj._namespaces,
-			items: documentAttributeCollections_as_objects
-		}, LIB.ctx)
-	
-		console.log(file_attribs, "file_attribs")
-		return file_attribs
-	} else {
-		console.log('Document Attribute Sheet Missing!');
-	}
-	} catch(e){
-		throw e
-	}
-}
-
-async function modelUploadAndImport(callback){
-	try{
-	const orderGroupFunctionResult = await new Promise((resolve) =>
-		setTimeout(async () => {
-			console.log('modelimport')
-			if (checkImportListAccess('ModelImport')) {
-
-				console.log('Please upload model sheet.')
-				let localBimpkPath = _.get(LIB.wbJSON, "Path");
-				let filePathForBimpK = localBimpkPath[1][1]
-				let bimpkFileName = filePathForBimpK.substring(filePathForBimpK.lastIndexOf('/') + 1)
-				console.log(bimpkFileName,'bimpkFileName');
-				let getExtName = bimpkFileName.split('.')[1]
-				const uploadFileResults = await new Promise((resolve) =>
-					setTimeout(async () => {
-						await uploadFiles(callback, filePathForBimpK, bimpkFileName)
-						resolve("true")
-					}, 0),
-				);
-				await addRemapElementsTypeDatasource()
-
-				let results = await importModelFile(getExtName)
-				console.log(results, "final-result")
-				if (results === "true") {
-					console.log("bimpk-loadedsuccessfully")
-					//Import Model Asset Sheet
-					if (checkImportListAccess('Assets')) {
-						const xlsAssetPropInfo = LIB.wbJSON["Asset Property Info"];
-						if (!xlsAssetPropInfo) {
-							console.log("Property Info Tab Missing");
-						}
-						let xlsAssetData = LIB.wbJSON.Assets
-						if(xlsAssetData){
-							let assetDataParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsAssetData });
-							let assetPropInfoParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsAssetPropInfo });
-							await importModeledAssets(assetDataParsed, assetPropInfoParsed, 'yesModel')
-						}
-					}
-					//Import Model Space Sheet
-					if (checkImportListAccess('Spaces')) {
-						const xlsSpacePropInfo = LIB.wbJSON["Space Property Info"];
-						console.log(xlsSpacePropInfo, "space property info")
-						if (!xlsSpacePropInfo) {
-							console.log("Property Info Tab Missing");
-						}
-						let xlsSpaceData = LIB.wbJSON.Spaces
-						console.log(xlsSpaceData, "xlsSpaceData")
-						if(xlsSpaceData){
-							let spaceDataParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsSpaceData });
-							console.log(spaceDataParsed, "spaceDataParsed")
-							let spacePropInfoParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsSpacePropInfo });
-							console.log(spacePropInfoParsed, "spacePropInfoParsed")
-							await importModeledSpaces(spaceDataParsed, spacePropInfoParsed,'yesModel')
-						}
-					}
-				}
-			}
-			else {
-				//Import Model Asset Sheet
-
-				if (checkImportListAccess('Assets')) {
-					const xlsAssetPropInfo = LIB.wbJSON["Asset Property Info"];
-					if (!xlsAssetPropInfo) {
-						console.log("Property Info Tab Missing");
-					}
-					let xlsAssetData = LIB.wbJSON.Assets
-					if(xlsAssetData){
-						let assetDataParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsAssetData });
-						let assetPropInfoParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsAssetPropInfo });
-						await importModeledAssets(assetDataParsed, assetPropInfoParsed,'noModel')
-					}
-
-				}
-				//Import Model Space Sheet
-				if (checkImportListAccess('Spaces')) {
-					const xlsSpacePropInfo = LIB.wbJSON["Space Property Info"];
-					console.log(xlsSpacePropInfo, "space property info")
-					if (!xlsSpacePropInfo) {
-						console.log("Property Info Tab Missing");
-					}
-					let xlsSpaceData = LIB.wbJSON.Spaces
-					console.log(xlsSpaceData, "xlsSpaceData")
-					if(xlsSpaceData){
-						let spaceDataParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsSpaceData });
-						console.log(spaceDataParsed, "spaceDataParsed")
-						let spacePropInfoParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsSpacePropInfo });
-						console.log(spacePropInfoParsed, "spacePropInfoParsed")
-						await importModeledSpaces(spaceDataParsed, spacePropInfoParsed,'noModel')
-					}
-				}
-
-			}
-			resolve("true")
-		}, 6000),
-	);
-	} catch(e){
-		throw e
-	}
-}
-
-async function createRelation(parentId, userItemId, relatedItems){
-	try{
-		return await LIB.IafScriptEngine.createRelations(
-			{
-				parentUserItemId: parentId,
-				_userItemId: userItemId,
-				_namespaces: LIB.proj._namespaces,
-				relations: relatedItems
-			}, LIB.ctx
-		)
-	} catch(e){
-		throw e
-	}
-}
-
-async function importModeledAssets(iaf_dt_grid_as_objects, data_as_objects, modelFlag) {
-
-	try{
-	//filter out those rows with no Asset Name
-	let assetRows = _.filter(iaf_dt_grid_as_objects, (row) => _.size(row['Asset Name']) > 0)
-
-	let assetObjects = _.map(iaf_dt_grid_as_objects, row => {
-		let props = {}
-		data_as_objects.forEach(info => {
-			props[info.Property] = {
-				dName: info.Property,
-				srcPropName: info.Property,
-				val: row[info.Property],
-				uom: info.uom,
-				type: info.Type,
-				epoch: info.Type === "date" ? LIB.UiUtils.IafDataPlugin.convertToEpoch(row[info.Property]) : undefined
-			}
-		})
-
-		return {
-			"Asset Name": row["Asset Name"],
-			properties: Object.assign({}, props)
-		}
-	})
-	console.log("assetObjects")
-
-	let asset_coll = await createOrRecreateColl('Asset Collection','asset_coll','Physical Asset Collection','iaf_ext_asset_coll')
-
-	console.log("asset_coll", asset_coll)
-
-	let keys = { "Asset Name": "text" }
-	let indexRes = await createOrRecreateIndexes(asset_coll._id, keys, 'assets')
-
-	let asset_items_res = await createItemsLot(asset_coll._userItemId, assetObjects)
-
-	console.log("asset_items_res")
-
-	if(modelFlag == 'noModel'){
-		return asset_items_res
-	} else {
-		let asset_query = {
-			query: {},
-			_userItemId: asset_coll._userItemId,
-			options: {
-				project: { "Asset Name": 1, _id: 1 },
-				page: { getAllItems: true },
-				sort: { "_id": 1 }
-			}
-		}
-	
-		let all_assets = await LIB.IafScriptEngine.getItems(
-			asset_query, LIB.ctx
-		)
-	
-		//Find revitGuid and store in sourceIds array for each asset.
-		//Because revitGuid is under asset.property, it's probably easier to fill them from
-		//assetRows by finding matching "Asset Name"
-		let assetsWithSourceIds = _.map(all_assets, (asset) => {
-			let sourceIds = []
-			let row = _.find(assetRows, ["Asset Name", asset["Asset Name"]])
-			if (row) {
-				sourceIds.push(row.revitGuid)
-			}
-			asset.sourceIds = sourceIds
-			return asset
-		})
-	
-		console.log("assetsWithSourceIds")
-		//console.log(assetsWithSourceIds)
-	
-		let nfallSourceIds = _.map(assetsWithSourceIds, 'sourceIds')
-	
-		console.log("nfallSourceIds")
-		//console.log(nfallSourceIds)
-	
-		let allSourceIds = _.flatten(nfallSourceIds)
-	
-		console.log("allSourceIds")
-		//console.log(allSourceIds)
-	
-		let currentModel = await LIB.IafScriptEngine.getCompositeCollection(
-			{ query: { "_userType": "bim_model_version", "_namespaces": { "$in": LIB.proj._namespaces }, "_itemClass": "NamedCompositeItem" } }, LIB.ctx, { getLatestVersion: true }
-		)
-	
-		console.log("currentModel", JSON.stringify(currentModel))
-	
-		if (!currentModel) return "Created Assets. No Model Present"
-	
-		let model_els_coll = await LIB.IafScriptEngine.getCollectionInComposite(
-			currentModel._userItemId, { _userType: "rvt_elements" },
-			LIB.ctx
-		)
-	
-		console.log("model_els_coll", model_els_coll)
-	
-		let platformIdList = await LIB.IafScriptEngine.findInCollectionsByPropValuesBulk(
-			{
-				queryProp: { prop: "source_id", values: allSourceIds },
-				collectionDesc: {
-					_userType: model_els_coll._userType,
-					_userItemId: model_els_coll._userItemId
-				},
-				options: {
-					project: { platformId: 1, source_id: 1 },
-					page: { getAllItems: true, getPageInfo: true },
-					chunkSize: 50
-				}
-			}, LIB.ctx
-		)
-	
-		console.log("platformIdList")
-		//console.log(platformIdList)
-	
-		assetsWithSourceIds = assetsWithSourceIds.filter(a => a.sourceIds.length > 0)
-	
-		let assetsWithPlatformIds = _.map(assetsWithSourceIds, (asset) => {
-			let platformIds = []
-			//let ids = _.find(platformIdList._list, _.get(["source_id", asset.sourceIds.length > 0 ? asset.sourceIds[0], undefined]))
-			let ids = _.find(platformIdList._list, { source_id: asset.sourceIds[0] })
-			platformIds.push({ _id: ids ? ids._id : undefined })
-			asset.platformIds = platformIds
-			return asset
-		})
-	
-		console.log("assetsWithPlatformIds")
-		//console.log(assetsWithPlatformIds)
-	
-		//assetsWithPlatformIdArray is not needed as it produces the same array
-		//since platformIds is already an array
-	
-		let relatedItems = _.map(assetsWithPlatformIds, (related) => {
-			let obj = {
-				parentItem: { _id: related._id },
-				relatedItems: related.platformIds
-			}
-			return obj
-		})
-	
-		console.log("relatedItems")
-		//console.log(relatedItems)
-	
-	
-		let result = await createRelation(asset_coll._userItemId, model_els_coll._userItemId, relatedItems)
-	
-		console.log('Import of Model Assets Complete')
-		//console.log(result)
-	
-		return result
-	}
-
-	} catch(e){
-		throw e
-	}
-}
-
-async function importModeledSpaces(iaf_dt_grid_as_objects, data_as_objects, modelFlag) {
-	try{
-	//filter out those rows with no space Name
-	let spaceRows = _.filter(iaf_dt_grid_as_objects, (row) => _.size(row['Space Name']) > 0)
-
-	console.log(spaceRows, "spaceRows")
-
-	let spaceObjects = _.map(iaf_dt_grid_as_objects, row => {
-		let props = {}
-		data_as_objects.forEach(info => {
-			props[info.Property] = {
-				dName: info.Property,
-				srcPropName: info.Property,
-				val: row[info.Property],
-				uom: info.uom,
-				type: info.Type,
-				epoch: info.Type === "date" ? LIB.UiUtils.IafDataPlugin.convertToEpoch(row[info.Property]) : undefined
-			}
-		})
-
-		return {
-			"Space Name": row["Space Name"],
-			properties: Object.assign({}, props)
-		}
-	})
-
-	let space_coll = await createOrRecreateColl('Space Collection','space_coll','Physical Space Collection','iaf_ext_space_coll')
-	console.log("space_coll", space_coll)
-
-	let keys = {
-		"properties.Name.val": "text",
-		"Space Name": "text"
-	}
-	let indexRes = await createOrRecreateIndexes(space_coll._id, keys, 'text')
-
-	let spaceItemRes = await createItemsLot(space_coll._userItemId, spaceObjects)
-
-	if(modelFlag == 'noModel'){
-		return spaceItemRes
-	} else {
-		let space_query = {
-			query: {},
-			_userItemId: space_coll._userItemId,
-			options: {
-				project: { "Space Name": 1, _id: 1 },
-				page: { getAllItems: true },
-				sort: { "_id": 1 }
-			}
-		}
-		console.log("space_query", space_query)
-		let all_spaces = await LIB.IafScriptEngine.getItems(space_query, LIB.ctx)
-	
-		console.log("all_spaces", all_spaces)
-	
-		//Find revitGuid and store in sourceIds array for each space.
-		let spacesWithSourceIds = _.map(all_spaces, (space) => {
-			let sourceIds = []
-			let row = _.find(spaceRows, ["Space Name", space["Space Name"]])
-			if (row) {
-				sourceIds.push(row.revitGuid)
-			}
-			space.sourceIds = sourceIds
-			return space
-	
-		})
-	
-		console.log("spacesWithSourceIds", spacesWithSourceIds)
-	
-		let nfallSourceIds = _.map(spacesWithSourceIds, 'sourceIds')
-	
-		console.log("nfallSourceIds", nfallSourceIds)
-	
-		let allSourceIds = _.flatten(nfallSourceIds)
-	
-		console.log("allSourceIds", allSourceIds)
-	
-		let currentModel = await LIB.IafScriptEngine.getCompositeCollection(
-			{ query: { "_userType": "bim_model_version", "_namespaces": { "$in": LIB.proj._namespaces }, "_itemClass": "NamedCompositeItem" } }, LIB.ctx, { getLatestVersion: true })
-		console.log("currentModel", JSON.stringify(currentModel))
-		if (!currentModel) return "Created Spaces. No Model Present"
-		let model_els_coll = await LIB.IafScriptEngine.getCollectionInComposite(
-			currentModel._userItemId, { _userType: "rvt_elements" },
-			LIB.ctx
-		)
-		console.log("model_els_coll", model_els_coll)
-	
-		let platformIdList = await LIB.IafScriptEngine.findInCollectionsByPropValuesBulk(
-			{
-				queryProp: { prop: "source_id", values: allSourceIds },
-				collectionDesc: {
-					_userType: model_els_coll._userType,
-					_userItemId: model_els_coll._userItemId
-				},
-				options: {
-					project: { platformId: 1, source_id: 1 },
-					page: { getAllItems: true, getPageInfo: true },
-					chunkSize: 50
-				}
-			}, LIB.ctx
-		)
-	
-		console.log("platformIdList", platformIdList)
-	
-		spacesWithSourceIds = spacesWithSourceIds.filter(a => a.sourceIds.length > 0)
-	
-		let spacesWithPlatformIds = _.map(spacesWithSourceIds, (space) => {
-			let platformIds = []
-			let ids = _.find(platformIdList._list, { source_id: space.sourceIds[0] })
-			platformIds.push({ _id: ids ? ids._id : undefined })
-			space.platformIds = platformIds
-			return space
-		})
-	
-		console.log("spacesWithPlatformIds", spacesWithPlatformIds)
-	
-		let relatedItems = _.map(spacesWithPlatformIds, (related) => {
-			let obj = {
-				parentItem: { _id: related._id },
-				relatedItems: related.platformIds
-			}
-			return obj
-		})
-	
-		console.log("relatedItems", relatedItems)
-	
-		let result = await createRelation(space_coll._userItemId, model_els_coll._userItemId, relatedItems)
-		console.log('Import of Model Spaces Complete. result:')
-		console.log(result)
-		return result
-	}
-
-	} catch(e){
-		throw e
-	}
-}
-
-async function uploadFiles(callback, filePathForBimpK, bimpkFileName) {
-
-	try{
-	const { IafFileSvc } = LIB.PlatformApi
-	// tags that we will apply to the files at upload based on file extension
-	const fileTags = {
-		jpg: ['image', 'jpg'],
-		txt: ['text', 'txt'],
-		json: ['data', 'json'],
-		bimpk: ['model', 'bimpk'],
-		sgpk: ['model', 'sgpk']
-	}
-	console.log("fileTags")
-	// select the three files in you downloaded from the course
-
-	let filePath = filePathForBimpK
-
-	// Read the file from the local folder
-	const fileData = fs.readFileSync(filePath);
-
-	let files = []
-
-	let fileDetails = {
-		name: bimpkFileName,
-		fileObj: fileData,
-	}
-
-	files.push(fileDetails)
-	//return files
-	let fileUploadResults = []
-
-	// we will provide an onComplete callback to the upload function so that we can resolve
-	// our deferred Promises once the upload completes
-	// we'll have this print to the console and the scripts callback
-	// you will see the scripts callback content in the script results when the script
-	// has completed running
-	// the callback you provide for onComplete will be passed to the created file record in the file service
-
-	function onUploadComplete(deferredResolve, file) {
-		let message = file._name + ' COMPLETE'
-		console.log(message)
-		callback(message)
-		fileUploadResults.push(file)
-		deferredResolve()
-	}
-
-	// we will provide an onProgress callback as well to the upload function
-	// we'll have this print to the console and the scripts callback
-	// you will see the scripts callback content in the script results when the script
-	// has completed running
-	// the callback you provide for onProgress will be passed the bytes uplaoded so far the total bytes
-
-	function onUploadProgress(bytesUploaded, bytesTotal, file) {
-		let percentComplete = (bytesUploaded / bytesTotal * 100).toFixed(1)
-		let message = file.name + ': ' + percentComplete
-		console.log(message)
-		callback(message)
-	}
-	// we will provide an onError callback as well to the upload function
-	// we'll have this print to the console and the scripts callback
-	// you will see the scripts callback content in the script results when the script
-	// has completed running
-
-	function onUploadError(deferredReject, error, file) {
-		let message = file.name + ': ERROR' + error
-		console.log(message)
-		callback(message)
-		deferredReject(error)
-	}
-	// upload each file async
-
-	let uploadPromises = [] // a collection of deferred promises, 1 for each file we upload
-	for (const file of files) {
-		// since the file will be uploaded async we create a Promise and only resolve it once the file
-		// has been 100% uploaded, making sure that the script does not complete before that.
-		// We will pass the deferred resolve method to the onUploadComplete callback
-		let deferredResolve, deferredReject
-		uploadPromises.push(new Promise((resolve, reject) => {
-			deferredResolve = resolve
-			deferredReject = reject
-		}))
-		try {
-			let tagsForFile = fileTags[file.name.split('.')[1]]
-			console.log(tagsForFile,'tagsForFile');
-			
-			// upload the file using resumable upload which can handle interrupts in network and which
-			// will allow partial file uploads that can be completed at a later point in time
-			//
-			// Params:
-			// 1. the file Stream, Buffer, or File to upload
-			// 2. the project _namespaces to which to uplaod the files
-			// 3. the parent folders for the file, if none are provided the root folder for the project will be used
-			// 4. the tags to apply to the file
-			// 5. the user's ctx uplaoding the files
-			// 6. an options object containing
-			//  the filename for the file if not provided on the file
-			//      onProgress, onComplete, and onError options callbacks
-			//
-			// We will upload one file at a time, but you can do parallel uploads by removing await
-
-			// and throttling the number of uploads you allow at one time
-
-			await IafFileSvc.addFileResumable(file.fileObj, LIB.ctx._namespaces, [], tagsForFile, LIB.ctx, {
-				filename: file.name,
-				onProgress: (bytesUploaded, bytesTotal) => onUploadProgress(bytesUploaded, bytesTotal, file),
-				onComplete: (file) => onUploadComplete(deferredResolve, file), // onComplete will be passed the file record in the file service
-				onError: (error) => onUploadError(deferredReject, error, file)
-			})
-		} catch (e) {
-			console.log(e)
-			deferredReject(e)
-		}
-	}
-
-
-	// wait for the onUploadSuccess callbacks to resolve all our deferred Promises then return from the script
-	return await Promise.all(uploadPromises).then(() => {
-		console.log(fileUploadResults, "fileUploadResults")
-		return fileUploadResults
-	})
-	} catch(e){
-		throw e
-	}
-}
-
-async function addRemapElementsTypeDatasource() {
-
-	try{
-	const query = {
-	  _namespaces: LIB.proj._namespaces,
-	  _userType: "map_elements_type"
-	};
-
-	const datasources = await LIB.IafScriptEngine.getDatasources(query, LIB.ctx);
-
-	const filteredDatasources = _.filter(datasources, d => d._userType === "map_elements_type"
-	  && d._name === "Map Elements type");
-
-	_.each(filteredDatasources, async datasource => await LIB.IafScriptEngine.removeDatasource({ orchId: datasource.id }, LIB.ctx));
-
-	let datasourceResult = await LIB.IafScriptEngine.addDatasource(
-	  {
-		_name: "Map Elements type",
-		_description: "Orchestrator to map elements to dtCategory and dtType from type map coll",
-		_namespaces: LIB.proj._namespaces,
-		_userType: "map_elements_type",
-		_params: {
-		  tasks: [
-			{
-			  _orchcomp: "default_script_target",
-			  _name: "Map type map to elements",
-			  _sequenceno: 1,
-			  "_actualparams": {
-				"userType": "iaf_map_elms_type",
-				"_scriptName": "mapAssetCollection"
-			  }
-			}
-		  ]
-		}
-	  }, LIB.ctx
-	)
-	return datasourceResult;
-	} catch(e){
-		throw e
-	}
-}
-
-async function updateFilecreateOrRecreateIndex() {
-
-	try{
-	let root_file_cont = await LIB.IafScriptEngine.getFileCollection({
-		_userType: "file_container",
-		_shortName: "Root Container"
-	}, LIB.ctx)
-
-	let keys =  {
-		name: "text",
-		"fileAttributes.Originator": "text",
-		"fileAttributes.Document Type": "text",
-		"fileAttributes.Levels And Locations": "text"
-	}
-	let index = await createOrRecreateIndexes(root_file_cont._id, keys, 'text')
-
-	return index
-	} catch(e){
-		throw e
-	}
-}
-
-async function createOrRecreateCollectionsCollection() {
-
-	try{
-	let collections = await createOrRecreateColl('Collections Collection','Collections','Collections of Entities','iaf_ext_coll_coll')
-
-	let keys = {
-		"Collection Name": "text",
-		"properties.Type.val": "text"
-	}
-	await createOrRecreateIndexes(collections._id, keys, 'text')
-
-	return collections
-	} catch(e){
-		throw e
-	}
-}
-
-function checkImportListAccess(funcName){
-	try{
-	const functionAccess = _.get(LIB.wbJSON, "Import List")
-	console.log(functionAccess, "functionAccess")
-	let xlsConfigDataParseds = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: functionAccess })
-	let getFunctionAccess = xlsConfigDataParseds.filter(x => x['Function Name'] == funcName).map(x => x.Access) == "Yes"
-	console.log(getFunctionAccess, "getFunctionAccess")
-	return getFunctionAccess
-	} catch(e){
-		throw e
-	}
-}
-
-async function importModelFile(extName) {
-
-	try{
-	let { IafFileSvc, IafDataSource } = LIB.PlatformApi
-
-	let searchCriteria = {
-		_parents: 'root',
-		_name: '.*'+ extName
-	}
-
-	let getBimpks = await IafFileSvc.getFiles(searchCriteria, LIB.ctx, { _pageSize: 100, getLatestVersion: true });
-	let bimpkOrSgpk = getBimpks._list[0];
-
-	console.log('bimpkOrSgpk', bimpkOrSgpk)
-
-	let getVersions = await IafFileSvc.getFileVersions(bimpkOrSgpk._id, LIB.ctx);
-	let version = _.find(getVersions._list, { _version: bimpkOrSgpk._tipVersion })
-	console.log('version', version)
-
-	let bimpkOrSgpkOrch;
-	let datasources = await IafDataSource.getOrchestrators(null, LIB.ctx);
-
-	console.log('datasources', datasources);
-
-	if (datasources) {
-		bimpkOrSgpkOrch = _.find(datasources._list, { _userType: extName +'_uploader' });
-	} else {
-		bimpkOrSgpkOrch = null;
-	}
-
-	console.log('bimpkOrSgpkOrch', bimpkOrSgpkOrch);
-
-	let task = _.find(bimpkOrSgpkOrch.orchsteps, { _name: 'default_script_target' });
-	let seqTypeId = task._compid;
-
-	console.log('seqTypeId', seqTypeId);
-
-	const orchReq = {
-		_namespaces: LIB.proj._namespaces,
-		orchestratorId: bimpkOrSgpkOrch.id,
-		_actualparams: [
-			{
-				sequence_type_id: seqTypeId,
-				params: {
-					_fileId: bimpkOrSgpk._id,
-					_fileVersionId: version._id
-				}
-			}
-		]
-	};
-	console.log(orchReq,'orchReq');
-
-	//run orchestrator
-	let result = await LIB.PlatformApi.IafDataSource.runOrchestrator(bimpkOrSgpkOrch.id, orchReq, LIB.ctx);
-	console.log(result, "result")
-
-	let orchRunResult = await LIB.PlatformApi.IafDataSource.getOrchRunStatus(result.id, LIB.ctx);
-	console.log(orchRunResult, "orchRunResult")
-	console.log(`orchRunResult`, orchRunResult[0].orchrunsteps)
-
-	let orchStepRunStatus = orchRunResult[0].orchrunsteps;
-	console.log(orchStepRunStatus, "orchStepRunStatus")
-	//poll based on in run id until finished
-
-	return await new Promise(resolve => {
-		let interval = setInterval(async () => {
-			let errStatus = _.filter(orchStepRunStatus, run_status => {
-				return run_status._status === "ERROR";
-			});
-			let queuedStatus = _.filter(orchStepRunStatus, run_status => {
-				return run_status._status === "QUEUED";
-			});
-			let runningStatus = _.filter(orchStepRunStatus, run_status => {
-				return run_status._status === "RUNNING";
-			});
-
-			console.log(interval, "interval")
-			console.log(`errStatus`, errStatus)
-			console.log(`queuedStatus`, queuedStatus)
-			console.log(`runningStatus`, runningStatus)
-
-			if (!_.isEmpty(errStatus) || (_.isEmpty(queuedStatus) && _.isEmpty(runningStatus))) {
-
-				if (_.isEmpty(errStatus)) {
-					orchStepRunStatus.forEach((step) => step.status = 'COMPLETED');
-					resolve('true')
-				}
-				//when import is complete kill the polling
-				clearInterval(interval);
-				//reset the currently selected model to the one we just imported
-				//note: this is kept on the app itself - thus the setSelectedItems
-				//not on the local state of the page
-			}
-			orchRunResult = await LIB.PlatformApi.IafDataSource.getOrchRunStatus(result.id, LIB.ctx);
-			orchStepRunStatus = orchRunResult[0].orchrunsteps;
-		}, 10000);
-
-	});
-	} catch(e){
-		throw e
-	}
-}
-
-async function createAssetSpaceReln(){
-
-	try{
-	    const xlsAssetPropInfo = LIB.wbJSON["Asset Property Info"];
-		const xlsSpacePropInfo = LIB.wbJSON["Space Property Info"];
-		if(xlsAssetPropInfo && xlsSpacePropInfo){
-			let assetPropParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsAssetPropInfo })
-			let spacePropParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsSpacePropInfo })
-		
-			let assetRelProp = assetPropParsed[0].Relation
-			console.log(assetRelProp,'assetRelProp');
-			
-			let spaceRelProp = spacePropParsed[0].Relation
-			console.log(spaceRelProp,'spaceRelProp');
-			
-		
-			if(!assetRelProp || !spaceRelProp){
-				console.log('Missing relation column in sheet!')
-				return
-			}
-			let iaf_asset_collection = await LIB.IafScriptEngine.getCollection(
-				{
-					"_userType": "iaf_ext_asset_coll",
-					"_shortName": "asset_coll",
-					"_itemClass": "NamedUserCollection"
-				}, LIB.ctx
-			)
-		
-			let allAssets = await LIB.IafScriptEngine.getItems({
-				"_userItemId": iaf_asset_collection._userItemId,
-				"options": { "page": { "getAllItems": true } }
-			}, LIB.ctx)
-		
-			console.log(allAssets.length,'length');
-			console.log(allAssets[0],'1 asset');
-		
-			let iaf_space_collection = await LIB.IafScriptEngine.getCollection(
-				{
-				  _userType: "iaf_ext_space_coll",
-				  _shortName: "space_coll",
-				  _itemClass: "NamedUserCollection",
-				}, LIB.ctx
-			  )
-			console.log(iaf_space_collection, 'spaceColl');
-			let spaces = await LIB.IafScriptEngine.getItems({
-				"_userItemId": iaf_space_collection._userItemId,
-				"options": {"page": {"getAllItems": true}}
-			 }, LIB.ctx)
-			 console.log("spaces", spaces.length)
-			 console.log(spaces[0],'1 spaces');
-			 if(allAssets && spaces){
-				let spaceObj = spaces.filter((spaceInfo) => spaceInfo.properties[spaceRelProp].val )
-				console.log(spaceObj.length,'rel length');
-				let relatedItems = spaceObj.map(data => { 
-					 let val = _.filter(allAssets, item => data.properties[spaceRelProp].val == item.properties[assetRelProp].val);
-					 if(val.length > 0){
-						return { parentItem:{ _id: data._id },
-						relatedItems: val.map(asset => {
-							return {_id : asset._id}
-						})
-					}
-					 }
-				})
-				let filteredData = relatedItems.filter(validRelations => validRelations)
-				console.log(filteredData, 'relatedItems');
-				if(filteredData.length > 0){
-					await createRelation(iaf_space_collection._userItemId, iaf_asset_collection._userItemId, filteredData)
-					let final = { success: true }
-					console.log(final,'Assets and Spaces Relation Imported');
-				}
-			 }
-		}
-		else{
-			console.log('Missing relation datas!');
-			
-		}
-	} catch(e){
-		throw e
-	}
-}
-
+const CONFIGVARS = {} 
 CONFIGVARS.userConfigToUserGroupMapSolAdmin = { userConfig: "iaf_dbm_soladmin_uc", userGroup: "sol_admin" }
 CONFIGVARS.userConfigToUserGroupMapProjectTeam = { userConfig: "iaf_dbm_pt_uc", userGroup: "pt" }
 CONFIGVARS.userConfigToUserGroupMapProjAdmin = { userConfig: "iaf_dbm_projadmin_uc", userGroup: "proj_admin" }
@@ -1737,11 +505,10 @@ CONFIGVARS.handlersAsset = {
 				"iaf_files_allusers",
 				"iaf_entspa_allusers",
 				"iaf_bms_allusers",
-				"iaf_collect_allusers"
+				"iaf_collect_allusers",
+				"iaf_sgpk_allusers"
 			],
-			"onHandlerLoad": [
-				"loadFileAttributes"
-			],
+			"onHandlerLoad": ["loadFileAttributes"],
 			"config": {
 				"type": {
 					"singular": "Asset",
@@ -1885,7 +652,8 @@ CONFIGVARS.handlersSpace = {
 				"iaf_files_allusers",
 				"iaf_entspa_allusers",
 				"iaf_bms_allusers",
-				"iaf_collect_allusers"
+				"iaf_collect_allusers",
+				"iaf_sgpk_allusers"
 			],
 			"config": {
 				"type": {
@@ -1971,7 +739,8 @@ CONFIGVARS.handlersNavigator = {
 				"iaf_files_allusers",
 				"iaf_entspa_allusers",
 				"iaf_bms_allusers",
-				"iaf_collect_allusers"
+				"iaf_collect_allusers",
+				"iaf_sgpk_allusers"
 			],
 			"config": {
 				"type": [
@@ -3236,10 +2005,10 @@ CONFIGVARS.scriptsDescriptorsAssets = {
 	_userType: "iaf_entass_allusers"
 }
 CONFIGVARS.scriptsDescriptorsSgpk = {
-	_name: "SGPK Upload",
-	_shortName: "iaf_sgpk_upload",
-	_description: "Load, Transform and Write Model from BIMPK",
-	_userType: "iaf_sgpk_upload"
+	_name: "SGPK Additional Functions",
+	_shortName: "iaf_sgpk_allusers",
+	_description: "Load Assets, Spaces with navigator",
+	_userType: "iaf_sgpk_allusers"
 }
 CONFIGVARS.scriptsDescriptorsAssetMapType = {
 	_name: "Asset Type Map User",
@@ -3255,12 +2024,1278 @@ CONFIGVARS.scriptsDescriptorsModelRepValidation = {
 	_userType: "iaf_ext_val_scr"
 }
 
+async function scriptList(){
+	try{
+	let { IafItemSvc } = LIB.PlatformApi
+	let loadedScripts = await IafItemSvc.getNamedUserItems({
+		"query": {}
+	}, LIB.ctx, {});
+	LIB.scriptAvailable = loadedScripts._list
+	return LIB.scriptAvailable
+    } catch(e){
+		console.error('Something went Wrong!', e)
+	}
+}
+
+async function selectConfigSheet() {
+	try{
+	console.log('Please upload config sheet.')
+	let xlsxFiles = await LIB.UiUtils.IafLocalFile.selectFiles({ multiple: false, accept: ".xlsx" })
+	//console.log(xlsxFiles,'xlsxFiles')
+	let typeWorkbook = await LIB.UiUtils.IafDataPlugin.readXLSXFiles(xlsxFiles)
+	let wbJSON = LIB.UiUtils.IafDataPlugin.workbookToJSON(typeWorkbook[0])
+	LIB.wbJSON = wbJSON
+	let xlsConfigData = wbJSON.Config
+	LIB.xlsConfigDataParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsConfigData })
+	} catch(e){
+		console.error('Something went Wrong!', e)
+	}
+}
+async function validate(){
+	const statusArr = {}
+	if(checkImportListAccess('Assets')){
+		statusArr['Asset Sheet'] = LIB.wbJSON.Assets ? 'Available' : 'Not Available'
+		statusArr['Asset Property Info'] = LIB.wbJSON['Asset Property Info'] ? 'Available' : 'Not Available'
+	}
+	if(checkImportListAccess('Spaces')){
+		statusArr['Space Sheet'] = LIB.wbJSON.Spaces ? 'Available' : 'Not Available'
+		statusArr['Space Property Info'] = LIB.wbJSON['Space Property Info'] ? 'Available' : 'Not Available'
+	}
+	if(checkImportListAccess('BimType')){
+		statusArr['BimType Sheet'] = LIB.wbJSON['Bim Type'] ? 'Available' : 'Not Available'
+	}
+	if(checkImportListAccess('DocumentAttributes')){
+		statusArr['DocumentAttributes Sheet'] = LIB.wbJSON['Document Attributes'] ? 'Available' : 'Not Available'
+	}
+	if(checkImportListAccess('ModelImport')){
+
+		let isModelPathExist = LIB.wbJSON.Path[1][1] ? LIB.wbJSON.Path[1][1] : ''
+		statusArr['Model Import'] = fs.existsSync(isModelPathExist) ? 'Available' : 'Not Available'
+	}
+	console.log(statusArr,'status');
+	let statusFiltered = Object.fromEntries(
+		Object.entries(statusArr).filter(([key, value]) => value === 'Not Available') )
+	console.log(statusFiltered,'statusFiltered');
+	if(Object.keys(statusFiltered).length){
+		let sheetArrays = [{ sheetName: "Missing Sheet Report", objects: [statusFiltered] }]
+        let relationWorkbook = await LIB.UiUtils.IafDataPlugin.createWorkbookFromAoO(sheetArrays)
+        await LIB.UiUtils.IafDataPlugin.saveWorkbook(relationWorkbook,"Missing_Sheet_Report.xlsx");
+		return false
+	} else {
+		return true
+	}
+	
+} 
+async function createUserGroups() {
+
+
+	let res
+	try {
+		res = await LIB.PlatformApi.IafProj.addUserGroups(LIB.proj, CONFIGVARS.userGroupDescriptors, LIB.ctx);
+	} catch (e) {
+		res = undefined;
+		throw e;
+	}
+
+	return res
+}
+async function userConfigsLoader() {
+
+	try{
+	const delay = (ms, value) =>
+		new Promise(resolve => setTimeout(resolve, ms, value));
+
+	async function childFunction() {
+		return await Promise.all([getUserGroupsFetchDelay()]);
+	}
+
+	async function getUserGroupsFetchDelay() {
+		const result = await delay(15000, "true");
+
+		let userGroups = await LIB.PlatformApi.IafProj.getUserGroups(LIB.proj, LIB.ctx)
+		console.log(userGroups, "userGroups-configloader-insidesomefunction")
+
+		if (userGroups?.length > 0) {
+			console.log(result);
+			return result;
+		}
+	}
+
+
+	async function main() {
+		const result = await childFunction();
+		console.log(result, "final_result")
+		if (result[0] === "true") {
+
+			let userGroups = await LIB.PlatformApi.IafProj.getUserGroups(LIB.proj, LIB.ctx)
+			console.log(userGroups, "userGroups-configloader-insidemainfunc")
+
+			//load content of the user configs 
+			let parsed = CONFIGVARS.configContents.map(x => JSON.parse(x))
+			let configs = _.zip(CONFIGVARS.configNames, parsed)
+			console.log(configs, "configs-configloader")
+			let configDefs = _.map(configs, (c) => {
+				return { configName: c[0], configContent: c[1] }
+			})
+
+			//create configItems
+			let configItems = []
+			configDefs.forEach((c) => {
+				let item = _.find(CONFIGVARS.userConfigDescriptors, { _shortName: c.configName })
+				if (item) {
+					item._version = { _userData: JSON.stringify(c.configContent, null, 2) }
+					configItems.push(item)
+				}
+			})
+			console.log(configItems, "configItems-configloader")
+
+
+			let groupItems = []
+
+			configDefs.forEach((c) => {
+				let group = _.find(CONFIGVARS.userConfigToUserGroupMap, { userConfig: c.configName })
+				console.log(group, "group")
+				let item = _.find(userGroups, { _shortName: group.userGroup })
+				console.log(item, "item-config")
+				if (item) {
+					groupItems.push(item)
+				}
+			})
+			console.log(groupItems, "groupItems-configloader")
+
+
+			//Look up the UserGroup mapped to each UserConfig
+
+
+			let configsAndGroups = _.zip(configItems, groupItems)
+			console.log(configsAndGroups, "configsAndGroups-configloader")
+			let configsAndGroupDefs = _.map(configsAndGroups, (c) => {
+				return { userConfig: c[0], userGroup: c[1] }
+			})
+			console.log(configsAndGroupDefs, "configsAndGroupDefs-configloader")
+			let results = []
+
+			//Do not use forEach as it is not Promise aware!
+			for (let i = 0; i < configsAndGroupDefs.length; i++) {
+				let result = await LIB.PlatformApi.IafUserGroup.addUserConfigs(configsAndGroupDefs[i].userGroup, [configsAndGroupDefs[i].userConfig], LIB.ctx);
+				if (result && result._list) {
+					result = result._list;
+				}
+				results.push(result);
+			}
+			console.log(results, "results-configloader")
+			return results
+		}
+	}
+
+	main();
+    } catch(e){
+		throw e
+	}
+
+}
+async function setLocalScriptPath(){
+	try{
+	let localAddr = _.get(LIB.wbJSON, "Path");
+	LIB.localScriptPath = localAddr === undefined ? [] : localAddr[1]
+	return LIB.localScriptPath;
+	} catch(e){
+		throw e
+	}
+}
+async function isUserGroupAvailable() {
+	try{
+	let userGroups = LIB.xlsConfigDataParsed.map(user => user.UserGroupName)
+	if (isScriptExists("iaf_dbm_soladmin_uc")) {
+		CONFIGVARS.userGroupDescriptors.push(CONFIGVARS.solutionAdmin)
+		CONFIGVARS.userConfigDescriptors.push(CONFIGVARS.userConfigSolutionAdmin)
+		CONFIGVARS.userConfigToUserGroupMap.push(CONFIGVARS.userConfigToUserGroupMapSolAdmin)
+		let findUser = [
+			{
+				"UserGroup": "Project Admin",
+				"UserGroupName": "Solution Admin",
+				"Assets": "Yes",
+				"Spaces": "Yes",
+				"Files": "Yes",
+				"ModelElements": "Yes",
+				"Collections": "Yes",
+				"BIMPK Upload": "No",
+				"SGPK Upload": "Yes",
+				"Navigator": "Yes"
+			}
+		]
+		await loadScripts(findUser)
+		Object.assign(CONFIGVARS.updateUserConfigContent,
+			{
+				handlers: {
+					...CONFIGVARS.updateUserConfigContent.handlers,
+					modelVer: CONFIGVARS.handlerManageModel.handler.modelVer
+				}
+			},
+			{
+				groupedPages: {
+					...CONFIGVARS.updateUserConfigContent.groupedPages,
+					Admin: CONFIGVARS.groupedPagesAdmin.groupedPages.Admin,
+				}
+			})
+		CONFIGVARS.updateUserConfigContent.groupedPages["Admin"].pages.push(CONFIGVARS.groupedPagesAdminUsergrp)
+		CONFIGVARS.updateUserConfigContent.groupedPages["Admin"].pages.push(CONFIGVARS.groupedPagesAssetTwinManageModel)
+
+		CONFIGVARS.configNames.push("iaf_dbm_soladmin_uc")
+		CONFIGVARS.configContents.push(JSON.stringify(CONFIGVARS.updateUserConfigContent))
+		CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages = []
+		Object.assign(CONFIGVARS.updateUserConfigContent, CONFIGVARS.resetUserConfigContent)
+	}
+	if (userGroups.includes("Project Admin") && isScriptExists("iaf_dbm_projadmin_uc")) {
+		CONFIGVARS.userGroupDescriptors.push(CONFIGVARS.projectAdmin)
+		CONFIGVARS.userConfigDescriptors.push(CONFIGVARS.userConfigProjectAdmin)
+		CONFIGVARS.userConfigToUserGroupMap.push(CONFIGVARS.userConfigToUserGroupMapProjAdmin)
+		let findUser = LIB.xlsConfigDataParsed.filter(x => x.UserGroupName == "Project Admin")
+		console.log(findUser, "finduser-projectAdmin")
+		await loadScripts(findUser)
+		Object.assign(CONFIGVARS.updateUserConfigContent,
+			{
+				handlers: {
+					...CONFIGVARS.updateUserConfigContent.handlers,
+					modelVer: CONFIGVARS.handlerManageModel.handler.modelVer
+				}
+			},
+			{
+				groupedPages: {
+					...CONFIGVARS.updateUserConfigContent.groupedPages,
+					Admin: CONFIGVARS.groupedPagesAdmin.groupedPages.Admin,
+				}
+			})
+		if (CONFIGVARS.updateUserConfigContent.groupedPages["Admin"].pages.length === 0) {
+			CONFIGVARS.updateUserConfigContent.groupedPages["Admin"].pages.push(CONFIGVARS.groupedPagesAdminUsergrp)
+			CONFIGVARS.updateUserConfigContent.groupedPages["Admin"].pages.push(CONFIGVARS.groupedPagesAssetTwinManageModel)
+		}
+		CONFIGVARS.configNames.push("iaf_dbm_projadmin_uc")
+		CONFIGVARS.configContents.push(JSON.stringify(CONFIGVARS.updateUserConfigContent))
+		CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages = []
+		Object.assign(CONFIGVARS.updateUserConfigContent, CONFIGVARS.resetUserConfigContent)
+	}
+	if (userGroups.includes("Project User") && isScriptExists("iaf_dbm_projuser_uc")) {
+		CONFIGVARS.userGroupDescriptors.push(CONFIGVARS.projectUser)
+		CONFIGVARS.userConfigDescriptors.push(CONFIGVARS.userConfigProjectUser)
+		CONFIGVARS.userConfigToUserGroupMap.push(CONFIGVARS.userConfigToUserGroupMapProjUser)
+		let findUser = LIB.xlsConfigDataParsed.filter(x => x.UserGroupName == "Project User")
+		console.log(findUser, "finduser-projectUser")
+		await loadScripts(findUser)
+		CONFIGVARS.configNames.push("iaf_dbm_projuser_uc")
+		CONFIGVARS.configContents.push(JSON.stringify(CONFIGVARS.updateUserConfigContent))
+		CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages = []
+		Object.assign(CONFIGVARS.updateUserConfigContent, CONFIGVARS.resetUserConfigContent)
+	}
+	if (userGroups.includes("Project Visitor") && isScriptExists("iaf_dbm_visitor_uc")) {
+		CONFIGVARS.userGroupDescriptors.push(CONFIGVARS.projectVisitor)
+		CONFIGVARS.userConfigDescriptors.push(CONFIGVARS.userConfigProjectVisitor)
+		CONFIGVARS.userConfigToUserGroupMap.push(CONFIGVARS.userConfigToUserGroupMapProjVisitor)
+		let findUser = LIB.xlsConfigDataParsed.filter(x => x.UserGroupName == "Project Visitor")
+		console.log(findUser, "finduser")
+		await loadScripts(findUser)
+		CONFIGVARS.configNames.push("iaf_dbm_visitor_uc")
+		CONFIGVARS.configContents.push(JSON.stringify(CONFIGVARS.updateUserConfigContent))
+		CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages = []
+		Object.assign(CONFIGVARS.updateUserConfigContent, CONFIGVARS.resetUserConfigContent)
+	}
+    } catch(e){
+		throw e
+	}
+}
+async function scriptsLoader() {
+
+	try{
+	let scripts = _.zip(Array.from(CONFIGVARS.scriptNames), CONFIGVARS.scriptContents)
+	console.log(scripts, "scripts")
+
+	let scriptDefs = _.map(scripts, (s) => {
+		return { scriptName: s[0], scriptContent: s[1] }
+	})
+	console.log(scriptDefs, "scriptDefs")
+
+	let scriptItems = []
+	scriptDefs.forEach((c) => {
+		let item = _.find(CONFIGVARS.scriptsDescriptors, { _shortName: c.scriptName })
+		if (item) {
+			item._version = { _userData: c.scriptContent };
+			item._namespaces = LIB.proj._namespaces
+			scriptItems.push(item)
+		}
+	})
+
+	console.log(scriptItems, "scriptItems")
+	let results = await LIB.PlatformApi.IafScripts.create(scriptItems, LIB.ctx);
+	console.log(results, "results")
+	if (results && results._list) {
+		results = results._list;
+	}
+	console.log(results, "inside-scriptloader")
+
+	return results
+	} catch(e){
+		throw e
+	}
+}
+async function createOrRecreateBIMPKOrSgpkDatasource(bimpkOrSgpk) {
+
+	try{
+		let bimpkOrSgpkCapital = bimpkOrSgpk.toUpperCase()
+		const query = {
+		  _namespaces: LIB.proj._namespaces,
+		  _userType: bimpkOrSgpk + "_uploader"
+		};
+	
+		const datasources = await LIB.IafScriptEngine.getDatasources(query, LIB.ctx);
+	
+		const filteredDatasources = _.filter(datasources, d => d._userType === bimpkOrSgpk + "_uploader"
+		  && d._name === bimpkOrSgpkCapital + " Uploader");
+	
+		_.each(filteredDatasources, async datasource => await LIB.IafScriptEngine.removeDatasource({ orchId: datasource.id }, LIB.ctx));
+	
+		let datasourceResult = await LIB.IafScriptEngine.addDatasource(
+			{
+				_name: bimpkOrSgpk + " Uploader",
+				_description: bimpkOrSgpkCapital + " Uploader",
+				_namespaces: LIB.proj._namespaces,
+				_userType: bimpkOrSgpk + "_uploader",
+				_schemaversion: "2.0",
+				_params: {
+					tasks: [
+						{
+							"name": "default_script_target",
+							"_actualparams": {
+								"userType": "iaf_import_model",
+								"_scriptName": "importModel"
+							},
+							"_sequenceno": 1
+						}
+					]
+				}
+			}, LIB.ctx
+		)
+		return datasourceResult;
+	} catch(e){
+		throw e
+	}
+}
+
+async function createOrRecreateColl(name, shortName, description, userType){
+	try{
+	return await LIB.IafScriptEngine.createOrRecreateCollection(
+		{
+			_name: name,
+			_shortName: shortName,
+			_namespaces: LIB.proj._namespaces,
+			_description: description,
+			_userType: userType
+		}, LIB.ctx)
+	} catch(e){
+		throw e
+	}
+}
+
+async function createItemsLot(userItemId, dataObjects){
+	try{
+		return await LIB.IafScriptEngine.createItemsBulk({
+			_userItemId: userItemId,
+			_namespaces: LIB.proj._namespaces,
+			items: dataObjects
+		}, LIB.ctx)
+	} catch(e){
+		throw e
+	}
+}
+
+async function createOrRecreateIndexes(id,keys,optionName) {
+	try{
+		return await LIB.IafScriptEngine.createOrRecreateIndex(
+			{
+				_id: id,
+				indexDefs: [
+					{
+						key: keys,
+						options: {
+							"name": optionName + "_search_index",
+							"default_language": "english"
+						}
+					}
+				]
+			}, LIB.ctx
+		)
+	} catch(e){
+		throw e
+	}
+}
+
+async function typeMapLoader() {
+
+	try{
+	const bimTypeCollection = _.get(LIB.wbJSON, "Bim Type");
+	if(checkImportListAccess('BimType') && bimTypeCollection){
+		const bimTypeCollection_data_objects = LIB.UiUtils.IafDataPlugin.parseGridData(
+			{ gridData: bimTypeCollection });
+			console.log(bimTypeCollection_data_objects, "bimTypeCollection_data_objects")
+
+			let atm_defs_coll = await createOrRecreateColl('ATM Def Collection','typemap_defs','Asset Type Map Collection','iaf_dt_type_map_defs_coll')
+			console.log("Type Map Collection", atm_defs_coll)
+		
+			let atm_defs_items_res = await createItemsLot(atm_defs_coll._userItemId, bimTypeCollection_data_objects)
+		
+			return atm_defs_items_res
+	} else {
+		console.log("Bim Type Sheet Tab Missing!");
+	}
+	} catch(e){
+		throw e
+	}
+}
+
+async function setupCDELoader() {
+
+	try{
+	const documentAttributeCollections = _.get(LIB.wbJSON, "Document Attributes");
+	if(checkImportListAccess('DocumentAttributes') && documentAttributeCollections){
+		console.log(documentAttributeCollections, "documentAttributeCollections")
+		let documentAttributeCollections_as_objects = LIB.UiUtils.IafDataPlugin.parseGridData(
+			{ gridData: documentAttributeCollections, options: { asColumns: true } })
+		console.log(documentAttributeCollections_as_objects, "documentAttributeCollections_as_objects")
+		
+		let file_attrib_coll = await createOrRecreateColl("FDM File Attrib Collection","devConfigfileattrib","FDM File Attribute Collection","iaf_cde_file_attrib_coll")
+	
+		console.log("file_attrib_coll", file_attrib_coll)
+	
+		let file_attribs = await LIB.IafScriptEngine.createItems({
+			_userItemId: file_attrib_coll._userItemId,
+			_namespaces: LIB.proj._namespaces,
+			items: documentAttributeCollections_as_objects
+		}, LIB.ctx)
+	
+		console.log(file_attribs, "file_attribs")
+		return file_attribs
+	} else {
+		console.log('Document Attribute Sheet Missing or Kept no!');
+	}
+	} catch(e){
+		throw e
+	}
+}
+
+async function modelUploadAndImport(callback){
+	try{
+	const orderGroupFunctionResult = await new Promise((resolve) =>
+		setTimeout(async () => {
+			console.log('modelimport')
+			if (checkImportListAccess('ModelImport')) {
+
+				console.log('Please upload model sheet.')
+				let localBimpkPath = _.get(LIB.wbJSON, "Path");
+				let filePathForBimpK = localBimpkPath[1][1]
+				let bimpkFileName = filePathForBimpK.substring(filePathForBimpK.lastIndexOf('/') + 1)
+				console.log(bimpkFileName,'bimpkFileName');
+				let getExtName = bimpkFileName.split('.')[1]
+				const uploadFileResults = await new Promise((resolve) =>
+					setTimeout(async () => {
+						await uploadFiles(callback, filePathForBimpK, bimpkFileName)
+						resolve("true")
+					}, 0),
+				);
+				await addRemapElementsTypeDatasource()
+
+				let results = await importModelFile(getExtName)
+				console.log(results, "final-result")
+				if (results === "true") {
+					console.log("bimpk-loadedsuccessfully")
+					//Import Model Asset Sheet
+					if (checkImportListAccess('Assets')) {
+						const xlsAssetPropInfo = LIB.wbJSON["Asset Property Info"];
+						let xlsAssetData = LIB.wbJSON.Assets
+						if(xlsAssetData && xlsAssetPropInfo){
+							let assetDataParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsAssetData });
+							let assetPropInfoParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsAssetPropInfo });
+							await importModeledAssets(assetDataParsed, assetPropInfoParsed, 'yesModel')
+						} else {
+							throw new Error('Missing Property Info Tab or Asset sheet!')
+						}
+					}
+					//Import Model Space Sheet
+					if (checkImportListAccess('Spaces')) {
+						const xlsSpacePropInfo = LIB.wbJSON["Space Property Info"];
+						console.log(xlsSpacePropInfo, "space property info")
+						let xlsSpaceData = LIB.wbJSON.Spaces
+						console.log(xlsSpaceData, "xlsSpaceData")
+						if(xlsSpaceData && xlsSpacePropInfo){
+							let spaceDataParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsSpaceData });
+							console.log(spaceDataParsed, "spaceDataParsed")
+							let spacePropInfoParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsSpacePropInfo });
+							console.log(spacePropInfoParsed, "spacePropInfoParsed")
+							await importModeledSpaces(spaceDataParsed, spacePropInfoParsed,'yesModel')
+						} else {
+							throw new Error('Missing Property Info Tab or Space sheet!')
+						}
+					}
+				}
+			}
+			else {
+				//Import Model Asset Sheet
+
+				if (checkImportListAccess('Assets')) {
+					const xlsAssetPropInfo = LIB.wbJSON["Asset Property Info"];
+					let xlsAssetData = LIB.wbJSON.Assets
+					if(xlsAssetData && xlsAssetPropInfo){
+						let assetDataParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsAssetData });
+						let assetPropInfoParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsAssetPropInfo });
+						await importModeledAssets(assetDataParsed, assetPropInfoParsed,'noModel')
+					} else {
+						throw new Error('Missing Property Info Tab or Asset sheet!')
+					}
+
+				}
+				//Import Model Space Sheet
+				if (checkImportListAccess('Spaces')) {
+					const xlsSpacePropInfo = LIB.wbJSON["Space Property Info"];
+					console.log(xlsSpacePropInfo, "space property info")
+					let xlsSpaceData = LIB.wbJSON.Spaces
+					console.log(xlsSpaceData, "xlsSpaceData")
+					if(xlsSpaceData && xlsSpacePropInfo){
+						let spaceDataParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsSpaceData });
+						console.log(spaceDataParsed, "spaceDataParsed")
+						let spacePropInfoParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsSpacePropInfo });
+						console.log(spacePropInfoParsed, "spacePropInfoParsed")
+						await importModeledSpaces(spaceDataParsed, spacePropInfoParsed,'noModel')
+					} else {
+						throw new Error('Missing Property Info Tab or Space sheet!')
+					}
+				}
+
+			}
+			resolve("true")
+		}, 6000),
+	);
+	} catch(e){
+		throw e
+	}
+}
+
+async function createRelation(parentId, userItemId, relatedItems){
+	try{
+		return await LIB.IafScriptEngine.createRelations(
+			{
+				parentUserItemId: parentId,
+				_userItemId: userItemId,
+				_namespaces: LIB.proj._namespaces,
+				relations: relatedItems
+			}, LIB.ctx
+		)
+	} catch(e){
+		throw e
+	}
+}
+
+async function importModeledAssets(iaf_dt_grid_as_objects, data_as_objects, modelFlag) {
+
+	try{
+	//filter out those rows with no Asset Name
+	let assetRows = _.filter(iaf_dt_grid_as_objects, (row) => _.size(row['Asset Name']) > 0)
+
+	let assetObjects = _.map(iaf_dt_grid_as_objects, row => {
+		let props = {}
+		data_as_objects.forEach(info => {
+			props[info.Property] = {
+				dName: info.Property,
+				srcPropName: info.Property,
+				val: row[info.Property],
+				uom: info.uom,
+				type: info.Type,
+				epoch: info.Type === "date" ? LIB.UiUtils.IafDataPlugin.convertToEpoch(row[info.Property]) : undefined
+			}
+		})
+
+		return {
+			"Asset Name": row["Asset Name"],
+			properties: Object.assign({}, props)
+		}
+	})
+	console.log("assetObjects")
+
+	let asset_coll = await createOrRecreateColl('Asset Collection','asset_coll','Physical Asset Collection','iaf_ext_asset_coll')
+
+	console.log("asset_coll", asset_coll)
+
+	let keys = { "Asset Name": "text" }
+	let indexRes = await createOrRecreateIndexes(asset_coll._id, keys, 'assets')
+
+	let asset_items_res = await createItemsLot(asset_coll._userItemId, assetObjects)
+
+	console.log("asset_items_res")
+
+	if(modelFlag == 'noModel'){
+		return asset_items_res
+	} else {
+		let asset_query = {
+			query: {},
+			_userItemId: asset_coll._userItemId,
+			options: {
+				project: { "Asset Name": 1, _id: 1 },
+				page: { getAllItems: true },
+				sort: { "_id": 1 }
+			}
+		}
+	
+		let all_assets = await LIB.IafScriptEngine.getItems(
+			asset_query, LIB.ctx
+		)
+	
+		//Find revitGuid and store in sourceIds array for each asset.
+		//Because revitGuid is under asset.property, it's probably easier to fill them from
+		//assetRows by finding matching "Asset Name"
+		let assetsWithSourceIds = _.map(all_assets, (asset) => {
+			let sourceIds = []
+			let row = _.find(assetRows, ["Asset Name", asset["Asset Name"]])
+			if (row) {
+				sourceIds.push(row.revitGuid)
+			}
+			asset.sourceIds = sourceIds
+			return asset
+		})
+	
+		console.log("assetsWithSourceIds")
+		//console.log(assetsWithSourceIds)
+	
+		let nfallSourceIds = _.map(assetsWithSourceIds, 'sourceIds')
+	
+		console.log("nfallSourceIds")
+		//console.log(nfallSourceIds)
+	
+		let allSourceIds = _.flatten(nfallSourceIds)
+	
+		console.log("allSourceIds")
+		//console.log(allSourceIds)
+	
+		let currentModel = await LIB.IafScriptEngine.getCompositeCollection(
+			{ query: { "_userType": "bim_model_version", "_namespaces": { "$in": LIB.proj._namespaces }, "_itemClass": "NamedCompositeItem" } }, LIB.ctx, { getLatestVersion: true }
+		)
+	
+		console.log("currentModel", JSON.stringify(currentModel))
+	
+		if (!currentModel) return "Created Assets. No Model Present"
+	
+		let model_els_coll = await LIB.IafScriptEngine.getCollectionInComposite(
+			currentModel._userItemId, { _userType: "rvt_elements" },
+			LIB.ctx
+		)
+	
+		console.log("model_els_coll", model_els_coll)
+	
+		if(model_els_coll._userType){
+			let platformIdList = await LIB.IafScriptEngine.findInCollectionsByPropValuesBulk(
+				{
+					queryProp: { prop: "source_id", values: allSourceIds },
+					collectionDesc: {
+						_userType: model_els_coll._userType,
+						_userItemId: model_els_coll._userItemId
+					},
+					options: {
+						project: { platformId: 1, source_id: 1 },
+						page: { getAllItems: true, getPageInfo: true },
+						chunkSize: 50
+					}
+				}, LIB.ctx
+			)
+		
+			console.log("platformIdList")
+			//console.log(platformIdList)
+		
+			assetsWithSourceIds = assetsWithSourceIds.filter(a => a.sourceIds.length > 0)
+		
+			let assetsWithPlatformIds = _.map(assetsWithSourceIds, (asset) => {
+				let platformIds = []
+				//let ids = _.find(platformIdList._list, _.get(["source_id", asset.sourceIds.length > 0 ? asset.sourceIds[0], undefined]))
+				let ids = _.find(platformIdList._list, { source_id: asset.sourceIds[0] })
+				platformIds.push({ _id: ids ? ids._id : undefined })
+				asset.platformIds = platformIds
+				return asset
+			})
+		
+			console.log("assetsWithPlatformIds")
+			//console.log(assetsWithPlatformIds)
+		
+			//assetsWithPlatformIdArray is not needed as it produces the same array
+			//since platformIds is already an array
+	
+			let relatedItems = _.map(assetsWithPlatformIds, (related) => {
+				let obj = {
+					parentItem: { _id: related._id },
+					relatedItems: related.platformIds
+				}
+				return obj
+			})
+			console.log("relatedItems")
+			//console.log(relatedItems)
+			let result = await createRelation(asset_coll._userItemId, model_els_coll._userItemId, relatedItems)
+			console.log('Import of Model Assets Complete')
+			//console.log(result)
+			return result
+		} else {
+			console.log('Missing model element collection!')
+		}
+
+	}
+
+	} catch(e){
+		throw e
+	}
+}
+
+async function importModeledSpaces(iaf_dt_grid_as_objects, data_as_objects, modelFlag) {
+	try{
+	//filter out those rows with no space Name
+	let spaceRows = _.filter(iaf_dt_grid_as_objects, (row) => _.size(row['Space Name']) > 0)
+
+	console.log(spaceRows, "spaceRows")
+
+	let spaceObjects = _.map(iaf_dt_grid_as_objects, row => {
+		let props = {}
+		data_as_objects.forEach(info => {
+			props[info.Property] = {
+				dName: info.Property,
+				srcPropName: info.Property,
+				val: row[info.Property],
+				uom: info.uom,
+				type: info.Type,
+				epoch: info.Type === "date" ? LIB.UiUtils.IafDataPlugin.convertToEpoch(row[info.Property]) : undefined
+			}
+		})
+
+		return {
+			"Space Name": row["Space Name"],
+			properties: Object.assign({}, props)
+		}
+	})
+
+	let space_coll = await createOrRecreateColl('Space Collection','space_coll','Physical Space Collection','iaf_ext_space_coll')
+	console.log("space_coll", space_coll)
+
+	let keys = {
+		"properties.Name.val": "text",
+		"Space Name": "text"
+	}
+	let indexRes = await createOrRecreateIndexes(space_coll._id, keys, 'text')
+
+	let spaceItemRes = await createItemsLot(space_coll._userItemId, spaceObjects)
+
+	if(modelFlag == 'noModel'){
+		return spaceItemRes
+	} else {
+		let space_query = {
+			query: {},
+			_userItemId: space_coll._userItemId,
+			options: {
+				project: { "Space Name": 1, _id: 1 },
+				page: { getAllItems: true },
+				sort: { "_id": 1 }
+			}
+		}
+		console.log("space_query", space_query)
+		let all_spaces = await LIB.IafScriptEngine.getItems(space_query, LIB.ctx)
+	
+		console.log("all_spaces", all_spaces)
+	
+		//Find revitGuid and store in sourceIds array for each space.
+		let spacesWithSourceIds = _.map(all_spaces, (space) => {
+			let sourceIds = []
+			let row = _.find(spaceRows, ["Space Name", space["Space Name"]])
+			if (row) {
+				sourceIds.push(row.revitGuid)
+			}
+			space.sourceIds = sourceIds
+			return space
+	
+		})
+	
+		console.log("spacesWithSourceIds", spacesWithSourceIds)
+	
+		let nfallSourceIds = _.map(spacesWithSourceIds, 'sourceIds')
+	
+		console.log("nfallSourceIds", nfallSourceIds)
+	
+		let allSourceIds = _.flatten(nfallSourceIds)
+	
+		console.log("allSourceIds", allSourceIds)
+	
+		let currentModel = await LIB.IafScriptEngine.getCompositeCollection(
+			{ query: { "_userType": "bim_model_version", "_namespaces": { "$in": LIB.proj._namespaces }, "_itemClass": "NamedCompositeItem" } }, LIB.ctx, { getLatestVersion: true })
+		console.log("currentModel", JSON.stringify(currentModel))
+		if (!currentModel) return "Created Spaces. No Model Present"
+		let model_els_coll = await LIB.IafScriptEngine.getCollectionInComposite(
+			currentModel._userItemId, { _userType: "rvt_elements" },
+			LIB.ctx
+		)
+		console.log("model_els_coll", model_els_coll)
+		if(model_els_coll._userType){
+			let platformIdList = await LIB.IafScriptEngine.findInCollectionsByPropValuesBulk(
+				{
+					queryProp: { prop: "source_id", values: allSourceIds },
+					collectionDesc: {
+						_userType: model_els_coll._userType,
+						_userItemId: model_els_coll._userItemId
+					},
+					options: {
+						project: { platformId: 1, source_id: 1 },
+						page: { getAllItems: true, getPageInfo: true },
+						chunkSize: 50
+					}
+				}, LIB.ctx
+			)
+		
+			console.log("platformIdList", platformIdList)
+		
+			spacesWithSourceIds = spacesWithSourceIds.filter(a => a.sourceIds.length > 0)
+		
+			let spacesWithPlatformIds = _.map(spacesWithSourceIds, (space) => {
+				let platformIds = []
+				let ids = _.find(platformIdList._list, { source_id: space.sourceIds[0] })
+				platformIds.push({ _id: ids ? ids._id : undefined })
+				space.platformIds = platformIds
+				return space
+			})
+		
+			console.log("spacesWithPlatformIds", spacesWithPlatformIds)
+		
+			let relatedItems = _.map(spacesWithPlatformIds, (related) => {
+				let obj = {
+					parentItem: { _id: related._id },
+					relatedItems: related.platformIds
+				}
+				return obj
+			})
+		
+			console.log("relatedItems", relatedItems)
+		
+			let result = await createRelation(space_coll._userItemId, model_els_coll._userItemId, relatedItems)
+			console.log('Import of Model Spaces Complete. result:')
+			console.log(result)
+			return result
+		} else {
+			console.log('Missing model element collection!')
+		}
+
+	}
+
+	} catch(e){
+		throw e
+	}
+}
+
+async function uploadFiles(callback, filePathForBimpK, bimpkFileName) {
+
+	try{
+	const { IafFileSvc } = LIB.PlatformApi
+	// tags that we will apply to the files at upload based on file extension
+	const fileTags = {
+		jpg: ['image', 'jpg'],
+		txt: ['text', 'txt'],
+		json: ['data', 'json'],
+		bimpk: ['model', 'bimpk'],
+		sgpk: ['model', 'sgpk']
+	}
+	console.log("fileTags")
+	// select the three files in you downloaded from the course
+
+	let filePath = filePathForBimpK
+
+	// Read the file from the local folder
+	const fileData = fs.readFileSync(filePath);
+
+	let files = []
+
+	let fileDetails = {
+		name: bimpkFileName,
+		fileObj: fileData,
+	}
+
+	files.push(fileDetails)
+	//return files
+	let fileUploadResults = []
+
+	// we will provide an onComplete callback to the upload function so that we can resolve
+	// our deferred Promises once the upload completes
+	// we'll have this print to the console and the scripts callback
+	// you will see the scripts callback content in the script results when the script
+	// has completed running
+	// the callback you provide for onComplete will be passed to the created file record in the file service
+
+	function onUploadComplete(deferredResolve, file) {
+		let message = file._name + ' COMPLETE'
+		console.log(message)
+		callback(message)
+		fileUploadResults.push(file)
+		deferredResolve()
+	}
+
+	// we will provide an onProgress callback as well to the upload function
+	// we'll have this print to the console and the scripts callback
+	// you will see the scripts callback content in the script results when the script
+	// has completed running
+	// the callback you provide for onProgress will be passed the bytes uplaoded so far the total bytes
+
+	function onUploadProgress(bytesUploaded, bytesTotal, file) {
+		let percentComplete = (bytesUploaded / bytesTotal * 100).toFixed(1)
+		let message = file.name + ': ' + percentComplete
+		console.log(message)
+		callback(message)
+	}
+	// we will provide an onError callback as well to the upload function
+	// we'll have this print to the console and the scripts callback
+	// you will see the scripts callback content in the script results when the script
+	// has completed running
+
+	function onUploadError(deferredReject, error, file) {
+		let message = file.name + ': ERROR' + error
+		console.log(message)
+		callback(message)
+		deferredReject(error)
+	}
+	// upload each file async
+
+	let uploadPromises = [] // a collection of deferred promises, 1 for each file we upload
+	for (const file of files) {
+		// since the file will be uploaded async we create a Promise and only resolve it once the file
+		// has been 100% uploaded, making sure that the script does not complete before that.
+		// We will pass the deferred resolve method to the onUploadComplete callback
+		let deferredResolve, deferredReject
+		uploadPromises.push(new Promise((resolve, reject) => {
+			deferredResolve = resolve
+			deferredReject = reject
+		}))
+		try {
+			let tagsForFile = fileTags[file.name.split('.')[1]]
+			console.log(tagsForFile,'tagsForFile');
+			
+			// upload the file using resumable upload which can handle interrupts in network and which
+			// will allow partial file uploads that can be completed at a later point in time
+			//
+			// Params:
+			// 1. the file Stream, Buffer, or File to upload
+			// 2. the project _namespaces to which to uplaod the files
+			// 3. the parent folders for the file, if none are provided the root folder for the project will be used
+			// 4. the tags to apply to the file
+			// 5. the user's ctx uplaoding the files
+			// 6. an options object containing
+			//  the filename for the file if not provided on the file
+			//      onProgress, onComplete, and onError options callbacks
+			//
+			// We will upload one file at a time, but you can do parallel uploads by removing await
+
+			// and throttling the number of uploads you allow at one time
+
+			await IafFileSvc.addFileResumable(file.fileObj, LIB.ctx._namespaces, [], tagsForFile, LIB.ctx, {
+				filename: file.name,
+				onProgress: (bytesUploaded, bytesTotal) => onUploadProgress(bytesUploaded, bytesTotal, file),
+				onComplete: (file) => onUploadComplete(deferredResolve, file), // onComplete will be passed the file record in the file service
+				onError: (error) => onUploadError(deferredReject, error, file)
+			})
+		} catch (e) {
+			console.log(e)
+			deferredReject(e)
+		}
+	}
+
+
+	// wait for the onUploadSuccess callbacks to resolve all our deferred Promises then return from the script
+	return await Promise.all(uploadPromises).then(() => {
+		console.log(fileUploadResults, "fileUploadResults")
+		return fileUploadResults
+	})
+	} catch(e){
+		throw e
+	}
+}
+
+async function addRemapElementsTypeDatasource() {
+
+	try{
+	const query = {
+	  _namespaces: LIB.proj._namespaces,
+	  _userType: "map_elements_type"
+	};
+
+	const datasources = await LIB.IafScriptEngine.getDatasources(query, LIB.ctx);
+
+	const filteredDatasources = _.filter(datasources, d => d._userType === "map_elements_type"
+	  && d._name === "Map Elements type");
+
+	_.each(filteredDatasources, async datasource => await LIB.IafScriptEngine.removeDatasource({ orchId: datasource.id }, LIB.ctx));
+
+	let datasourceResult = await LIB.IafScriptEngine.addDatasource(
+	  {
+		_name: "Map Elements type",
+		_description: "Orchestrator to map elements to dtCategory and dtType from type map coll",
+		_namespaces: LIB.proj._namespaces,
+		_userType: "map_elements_type",
+		_params: {
+		  tasks: [
+			{
+			  _orchcomp: "default_script_target",
+			  _name: "Map type map to elements",
+			  _sequenceno: 1,
+			  "_actualparams": {
+				"userType": "iaf_map_elms_type",
+				"_scriptName": "mapAssetCollection"
+			  }
+			}
+		  ]
+		}
+	  }, LIB.ctx
+	)
+	return datasourceResult;
+	} catch(e){
+		throw e
+	}
+}
+
+async function updateFilecreateOrRecreateIndex() {
+
+	try{
+	let root_file_cont = await LIB.IafScriptEngine.getFileCollection({
+		_userType: "file_container",
+		_shortName: "Root Container"
+	}, LIB.ctx)
+
+	let keys =  {
+		name: "text",
+		"fileAttributes.Originator": "text",
+		"fileAttributes.Document Type": "text",
+		"fileAttributes.Levels And Locations": "text"
+	}
+	let index = await createOrRecreateIndexes(root_file_cont._id, keys, 'text')
+
+	return index
+	} catch(e){
+		throw e
+	}
+}
+
+async function createOrRecreateCollectionsCollection() {
+
+	try{
+	let collections = await createOrRecreateColl('Collections Collection','Collections','Collections of Entities','iaf_ext_coll_coll')
+
+	let keys = {
+		"Collection Name": "text",
+		"properties.Type.val": "text"
+	}
+	await createOrRecreateIndexes(collections._id, keys, 'text')
+
+	return collections
+	} catch(e){
+		throw e
+	}
+}
+
+function checkImportListAccess(funcName){
+	try{
+	const functionAccess = _.get(LIB.wbJSON, "Import List")
+	console.log(functionAccess, "functionAccess")
+	let xlsConfigDataParseds = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: functionAccess })
+	let getFunctionAccess = xlsConfigDataParseds.filter(x => x['Function Name'] == funcName).map(x => x.Access) == "Yes"
+	console.log(getFunctionAccess, "getFunctionAccess")
+	return getFunctionAccess
+	} catch(e){
+		throw e
+	}
+}
+
+async function importModelFile(extName) {
+
+	try{
+	let { IafFileSvc, IafDataSource } = LIB.PlatformApi
+
+	let searchCriteria = {
+		_parents: 'root',
+		_name: '.*'+ extName
+	}
+
+	let getBimpks = await IafFileSvc.getFiles(searchCriteria, LIB.ctx, { _pageSize: 100, getLatestVersion: true });
+	let bimpkOrSgpk = getBimpks._list[0];
+
+	console.log('bimpkOrSgpk', bimpkOrSgpk)
+
+	let getVersions = await IafFileSvc.getFileVersions(bimpkOrSgpk._id, LIB.ctx);
+	let version = _.find(getVersions._list, { _version: bimpkOrSgpk._tipVersion })
+	console.log('version', version)
+
+	let bimpkOrSgpkOrch;
+	let datasources = await IafDataSource.getOrchestrators(null, LIB.ctx);
+
+	console.log('datasources', datasources);
+
+	if (datasources) {
+		bimpkOrSgpkOrch = _.find(datasources._list, { _userType: extName +'_uploader' });
+	} else {
+		bimpkOrSgpkOrch = null;
+	}
+
+	console.log('bimpkOrSgpkOrch', bimpkOrSgpkOrch);
+
+	let task = _.find(bimpkOrSgpkOrch.orchsteps, { _name: 'default_script_target' });
+	let seqTypeId = task._compid;
+
+	console.log('seqTypeId', seqTypeId);
+
+	const orchReq = {
+		_namespaces: LIB.proj._namespaces,
+		orchestratorId: bimpkOrSgpkOrch.id,
+		_actualparams: [
+			{
+				sequence_type_id: seqTypeId,
+				params: {
+					_fileId: bimpkOrSgpk._id,
+					_fileVersionId: version._id
+				}
+			}
+		]
+	};
+	console.log(orchReq,'orchReq');
+
+	//run orchestrator
+	let result = await LIB.PlatformApi.IafDataSource.runOrchestrator(bimpkOrSgpkOrch.id, orchReq, LIB.ctx);
+	console.log(result, "result")
+
+	let orchRunResult = await LIB.PlatformApi.IafDataSource.getOrchRunStatus(result.id, LIB.ctx);
+	console.log(orchRunResult, "orchRunResult")
+	console.log(`orchRunResult`, orchRunResult[0].orchrunsteps)
+
+	let orchStepRunStatus = orchRunResult[0].orchrunsteps;
+	console.log(orchStepRunStatus, "orchStepRunStatus")
+	//poll based on in run id until finished
+
+	return await new Promise(resolve => {
+		let interval = setInterval(async () => {
+			let errStatus = _.filter(orchStepRunStatus, run_status => {
+				return run_status._status === "ERROR";
+			});
+			let queuedStatus = _.filter(orchStepRunStatus, run_status => {
+				return run_status._status === "QUEUED";
+			});
+			let runningStatus = _.filter(orchStepRunStatus, run_status => {
+				return run_status._status === "RUNNING";
+			});
+
+			console.log(interval, "interval")
+			console.log(`errStatus`, errStatus)
+			console.log(`queuedStatus`, queuedStatus)
+			console.log(`runningStatus`, runningStatus)
+
+			if (!_.isEmpty(errStatus) || (_.isEmpty(queuedStatus) && _.isEmpty(runningStatus))) {
+
+				if (_.isEmpty(errStatus)) {
+					orchStepRunStatus.forEach((step) => step.status = 'COMPLETED');
+					resolve('true')
+				}
+				//when import is complete kill the polling
+				clearInterval(interval);
+				//reset the currently selected model to the one we just imported
+				//note: this is kept on the app itself - thus the setSelectedItems
+				//not on the local state of the page
+			}
+			orchRunResult = await LIB.PlatformApi.IafDataSource.getOrchRunStatus(result.id, LIB.ctx);
+			orchStepRunStatus = orchRunResult[0].orchrunsteps;
+		}, 10000);
+
+	});
+	} catch(e){
+		throw e
+	}
+}
+
+async function createAssetSpaceReln(){
+
+	try{
+	    const xlsAssetPropInfo = LIB.wbJSON["Asset Property Info"];
+		const xlsSpacePropInfo = LIB.wbJSON["Space Property Info"];
+		if(xlsAssetPropInfo && xlsSpacePropInfo && checkImportListAccess('Assets') && checkImportListAccess('Spaces')){
+			let assetPropParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsAssetPropInfo })
+			let spacePropParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsSpacePropInfo })
+		
+			let assetRelProp = assetPropParsed[0].Relation
+			console.log(assetRelProp,'assetRelProp');
+			
+			let spaceRelProp = spacePropParsed[0].Relation
+			console.log(spaceRelProp,'spaceRelProp');
+			
+		
+			if(!assetRelProp || !spaceRelProp){
+				console.log('Missing relation column in sheet!')
+				return
+			}
+			let iaf_asset_collection = await LIB.IafScriptEngine.getCollection(
+				{
+					"_userType": "iaf_ext_asset_coll",
+					"_shortName": "asset_coll",
+					"_itemClass": "NamedUserCollection"
+				}, LIB.ctx
+			)
+		
+			let allAssets = await LIB.IafScriptEngine.getItems({
+				"_userItemId": iaf_asset_collection._userItemId,
+				"options": { "page": { "getAllItems": true } }
+			}, LIB.ctx)
+		
+			console.log(allAssets.length,'length');
+			console.log(allAssets[0],'1 asset');
+		
+			let iaf_space_collection = await LIB.IafScriptEngine.getCollection(
+				{
+				  _userType: "iaf_ext_space_coll",
+				  _shortName: "space_coll",
+				  _itemClass: "NamedUserCollection",
+				}, LIB.ctx
+			  )
+			console.log(iaf_space_collection, 'spaceColl');
+			let spaces = await LIB.IafScriptEngine.getItems({
+				"_userItemId": iaf_space_collection._userItemId,
+				"options": {"page": {"getAllItems": true}}
+			 }, LIB.ctx)
+			 console.log("spaces", spaces.length)
+			 console.log(spaces[0],'1 spaces');
+			 if(allAssets && spaces){
+				let spaceObj = spaces.filter((spaceInfo) => spaceInfo.properties[spaceRelProp].val )
+				console.log(spaceObj.length,'rel length');
+				let relatedItems = spaceObj.map(data => { 
+					 let val = _.filter(allAssets, item => data.properties[spaceRelProp].val == item.properties[assetRelProp].val);
+					 if(val.length > 0){
+						return { parentItem:{ _id: data._id },
+						relatedItems: val.map(asset => {
+							return {_id : asset._id}
+						})
+					}
+					 }
+				})
+				let filteredData = relatedItems.filter(validRelations => validRelations)
+				console.log(filteredData, 'relatedItems');
+				if(filteredData.length > 0){
+					await createRelation(iaf_space_collection._userItemId, iaf_asset_collection._userItemId, filteredData)
+					let final = { success: true }
+					console.log(final,'Assets and Spaces Relation Imported');
+				}
+			 }
+		}
+		else{
+			console.log('Missing relation datas!');
+			
+		}
+	} catch(e){
+		throw e
+	}
+}
+
 async function getScriptData(fileName) {
 	try{
 	CONFIGVARS.scriptNames.add(fileName)
 	let actualPath = LIB.localScriptPath[0].substr(-1) !== '/' ? LIB.localScriptPath[0] + '/' : LIB.localScriptPath[0]
 	console.log(actualPath,'actualPath');
-	let oneClickPath = 'scripts/'
+	let oneClickPath = 'Solution Engineering/OneClick Project/scripts/'
 	let filenames = fs.readdirSync(actualPath + oneClickPath);
 	filenames.forEach(file => {
 	if(file.split('.')[0] == fileName){
@@ -3326,8 +3361,12 @@ async function loadScripts(findUser) {
 			}
 		)
 		if(findUser[0]['SGPK Upload'] == "Yes"){
-			CONFIGVARS.handlersNavigator.handlers.navigator.config.entityData.Asset.getEntityFromModel = 'getAssetFromModelSgpk'
-			CONFIGVARS.handlersNavigator.handlers.navigator.config.entityData.Space.getEntityFromModel = 'getSpaceFromModelSgpk'
+			let getAssetScriptObj = CONFIGVARS.handlersNavigator.handlers.navigator.config.entityData.Asset
+			let getSpaceScriptObj = CONFIGVARS.handlersNavigator.handlers.navigator.config.entityData.Space
+			getAssetScriptObj.script = "getAssetsSgpk"
+			getSpaceScriptObj.script = "getSpacesSgpk"
+			getAssetScriptObj.getEntityFromModel = 'getAssetFromModelSgpk'
+			getSpaceScriptObj.getEntityFromModel = 'getSpaceFromModelSgpk'
 		}
 		CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages.push(CONFIGVARS.groupedPagesAssetTwinNav)
 		if(CONFIGVARS.updateUserConfigContent.handlers.navigator.config.tableView.Asset.component.columns.length === 1 && assetTableProperty){
@@ -3372,8 +3411,9 @@ async function loadScripts(findUser) {
 		await createOrRecreateBIMPKOrSgpkDatasource('bimpk')
 	}
 
-	if (findUser[0]["SGPK Upload"] == "Yes" && findUser[0]["BIMPK Upload"] == "No" && isScriptExists("iaf_sgpk_upload")) {
-		CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsModelImport)
+	if (findUser[0]["SGPK Upload"] == "Yes" && findUser[0]["BIMPK Upload"] == "No" && isScriptExists("iaf_sgpk_allusers")) {
+		CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsModelImport, CONFIGVARS.scriptsDescriptorsSgpk)
+		await getScriptData('iaf_sgpk_allusers')
 		await getScriptData('iaf_import_model')
 		await createOrRecreateBIMPKOrSgpkDatasource('sgpk')
 	}
@@ -3401,6 +3441,15 @@ async function loadScripts(findUser) {
 				}
 			})
 
+		if(findUser[0]['SGPK Upload'] == "Yes"){
+			let getTreeConfig = CONFIGVARS.entitySelectConfigAssets.entitySelectConfig.Asset[1]
+			if(getTreeConfig.id == 'treesearch'){
+				getTreeConfig.treeLevels[0].property = 'Category'
+				getTreeConfig.treeLevels[0].script = 'getCategoriesWithCountSgpk'
+				getTreeConfig.treeLevels[1].property = 'Type'
+				getTreeConfig.treeLevels[1].script = 'getTypesWithChildrenCountSgpk'
+			}
+		}
 
 		CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages.push(CONFIGVARS.groupedPagesAssetTwinAsset)
 		if(CONFIGVARS.updateUserConfigContent.handlers.assets.config.tableView.component.columns.length === 1 && assetTableProperty){
@@ -3452,46 +3501,49 @@ async function loadScripts(findUser) {
 		}
 	}
 
-	let arrayOFItems = LIB.documentAttributeCommonName.map(data => {
-		console.log(data, "LIB.documentAttributeCommonNameData")
-		return {
-			"name": data,
-			"query": data == "Manufacturer" || data == "Revision" ? "<<CREATABLE_SCRIPTED_SELECTS>>" : "<<SIMPLE_SELECT>>",
-			"script": "get" + data.replace(/\s/g, ""),
-			"required": false
-		};
-	})
-
-	console.log(arrayOFItems);
-	let arrayOFItemsFilePropertyUI = LIB.documentAttributeCommonName.slice(0, 4).map(data => {
-		return {
-
-			"name": data,
-			"accessor": data + ".val"
-
-		};
-	})
-	console.log(arrayOFItemsFilePropertyUI);
-
-
-	let fileTableProperty = LIB.documentAttributeCommonName['tableView'].map(data => {
-		return {
-			"name": data.TableView,
-			"accessor": "properties." + data.TableView + ".val"
-		};
-	})
-	console.log(fileTableProperty,'fileTableProperty');
-
-	let editPropertyFileCollection = LIB.documentAttributeCommonName.map((obj1, index) => {
-		console.log(obj1, "LIB.documentAttributeCommonName2")
-		return {
-			[obj1]: {
-				"query": obj1 == 'Manufacturer' || obj1 == 'Revision' ? "<<CREATABLE_SCRIPTED_SELECTS>>" : "<<SCRIPTED_SELECTS>>",
-				"script": "get" + obj1.replace(/\s/g, ""),
-				"multi": false
-			}
-		};
-	});
+	let arrayOFItems, arrayOFItemsFilePropertyUI, fileTableProperty, editPropertyFileCollection
+	if(checkImportListAccess('DocumentAttributes')){
+		arrayOFItems = LIB.documentAttributeCommonName.map(data => {
+			console.log(data, "LIB.documentAttributeCommonNameData")
+			return {
+				"name": data,
+				"query": data == "Manufacturer" || data == "Revision" ? "<<CREATABLE_SCRIPTED_SELECTS>>" : "<<SIMPLE_SELECT>>",
+				"script": "get" + data.replace(/\s/g, ""),
+				"required": false
+			};
+		})
+	
+		console.log(arrayOFItems);
+		arrayOFItemsFilePropertyUI = LIB.documentAttributeCommonName.slice(0, 4).map(data => {
+			return {
+	
+				"name": data,
+				"accessor": data + ".val"
+	
+			};
+		})
+		console.log(arrayOFItemsFilePropertyUI);
+	
+	
+		fileTableProperty = LIB.documentAttributeCommonName['tableView'].map(data => {
+			return {
+				"name": data.TableView,
+				"accessor": "properties." + data.TableView + ".val"
+			};
+		})
+		console.log(fileTableProperty,'fileTableProperty');
+	
+		editPropertyFileCollection = LIB.documentAttributeCommonName.map((obj1, index) => {
+			console.log(obj1, "LIB.documentAttributeCommonName2")
+			return {
+				[obj1]: {
+					"query": obj1 == 'Manufacturer' || obj1 == 'Revision' ? "<<CREATABLE_SCRIPTED_SELECTS>>" : "<<SCRIPTED_SELECTS>>",
+					"script": "get" + obj1.replace(/\s/g, ""),
+					"multi": false
+				}
+			};
+		});
+	}
 
 	if (findUser[0]["Files"] == "Yes" && isScriptExists("iaf_files_allusers")) {
 		CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsFiles)
@@ -3518,20 +3570,20 @@ async function loadScripts(findUser) {
 				}
 			}
 		)
-		if (CONFIGVARS.updateUserConfigContent.handlers.files.config.data.Properties.component.columns.length === 0) {
+		if (CONFIGVARS.updateUserConfigContent.handlers.files.config.data.Properties.component.columns.length === 0 && checkImportListAccess('DocumentAttributes')) {
 			console.log(editPropertyFileCollection, "editPropertyFileCollection")
 			Object.assign(CONFIGVARS.updateUserConfigContent.handlers.files.config.actions.Edit.component.propertyUiTypes,
 				...editPropertyFileCollection);
 		}
 		console.log(CONFIGVARS.updateUserConfigContent.handlers.files.config.data.Properties.component.columns.length, "filesLength")
-		if (CONFIGVARS.updateUserConfigContent.handlers.files.config.data.Properties.component.columns.length === 0) {
+		if (CONFIGVARS.updateUserConfigContent.handlers.files.config.data.Properties.component.columns.length === 0 && checkImportListAccess('DocumentAttributes')) {
 			CONFIGVARS.updateUserConfigContent.handlers.files.config.data.Properties.component.columns.push(...arrayOFItemsFilePropertyUI)
 		}
-		if (CONFIGVARS.updateUserConfigContent.handlers.files.config.tableView.component.columns.length === 1) {
+		if (CONFIGVARS.updateUserConfigContent.handlers.files.config.tableView.component.columns.length === 1 && checkImportListAccess('DocumentAttributes')) {
 			CONFIGVARS.updateUserConfigContent.handlers.files.config.tableView.component.columns.push(...fileTableProperty)
 		}
 		console.log(CONFIGVARS.updateUserConfigContent.handlers.fileUpload.config.columns.length, "filesLength2")
-		if (CONFIGVARS.updateUserConfigContent.handlers.fileUpload.config.columns.length === 0) {
+		if (CONFIGVARS.updateUserConfigContent.handlers.fileUpload.config.columns.length === 0 && checkImportListAccess('DocumentAttributes')) {
 			console.log('arrayOFItems', arrayOFItems)
 			CONFIGVARS.updateUserConfigContent.handlers.fileUpload.config.columns.push(...arrayOFItems)
 		}
@@ -3576,13 +3628,15 @@ async function isDocumentAttrAvailable(){
     let documentAttrExcelFileRead = _.get(LIB.wbJSON, "Document Attributes");
 	console.log(documentAttrExcelFileRead, "documentAttrExcelFileRead")
 
-	if(documentAttrExcelFileRead){
+	if(documentAttrExcelFileRead && checkImportListAccess('DocumentAttributes')){
 		LIB.documentAttributeCommonName = documentAttrExcelFileRead[0].filter(val => val !== 'TableView' && val)
 		console.log(LIB.documentAttributeCommonName, "documentAttributeCommonName")
 	
 		let tableProps = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: documentAttrExcelFileRead });
 		let tableViewDatas = tableProps.filter(tableData => tableData.TableView)
 		LIB.documentAttributeCommonName['tableView'] = tableViewDatas
+	} else {
+		console.error('Missing Document Attributes tab or DocumentAttributes kept No')
 	}
 	} catch(e){
 		throw e
@@ -3595,8 +3649,11 @@ async function isAssetPropsAvailable(){
 	LIB.assetAttributeCommonName = assetAttributeCollectionsFromExcel !== undefined ? assetAttributeCollectionsFromExcel[0] : []
 	console.log(LIB.assetAttributeCommonName, "LIB.assetAttributeCommonName")
 	
-	let hiddenprops = LIB.wbJSON["Asset Property Info"]
-	if(hiddenprops){
+	let propsUnfiltered = LIB.wbJSON["Asset Property Info"]
+	
+	if(propsUnfiltered && checkImportListAccess('Assets')){
+		let hiddenprops = propsUnfiltered.filter(attr => JSON.stringify(attr) !== '{}' && attr.length)
+		console.log(hiddenprops,'hiddenprops--');
 		let groups = {}
 		var groupLength = 0
 			hiddenprops.map((groupsdata,i) => {
@@ -3625,6 +3682,8 @@ async function isAssetPropsAvailable(){
 		LIB.assetAttributeCommonName['hiddenProps'] = hiddenProps
 		LIB.assetAttributeCommonName['tableView'] = tableView
 		console.log(LIB.assetAttributeCommonName, "assetAttributeDatas")
+	} else {
+		console.error('Missing Property or Assets kept No')
 	}
 	} catch(e){
 		throw e
@@ -3638,7 +3697,7 @@ async function isSpacePropsAvailable(){
 
 	 const spaceProps = LIB.wbJSON['Space Property Info']
 	// console.log(spaceProps,'spaceprops')
-	if(spaceProps){
+	if(spaceProps && checkImportListAccess('Spaces')){
 		let spaceGroups = {}
 		var spaceGroupLen = 0
 		spaceProps.map((groupsdata,i) => {
@@ -3665,6 +3724,8 @@ async function isSpacePropsAvailable(){
 
 		let spaceTableView = hiddenSpaceProps.filter(table => table.TableView)
 		LIB.spaceAttributeCommonName['tableView'] = spaceTableView
+	} else{
+		console.error('Missing sheet or Assets kept no')
 	}
 	} catch(e){
 		throw e
@@ -3679,7 +3740,7 @@ let ProjSetup = {
 		return RunnableScripts
 	},
 
-	async oneClickSetup(input, libraries, ctx, callback) {
+	async easyAssetTwinSetup(input, libraries, ctx, callback) {
 		
 		let { PlatformApi, UiUtils, IafScriptEngine } = libraries;
 		let proj = await PlatformApi.IafProj.getCurrent(ctx);
@@ -3692,31 +3753,33 @@ let ProjSetup = {
 		LIB.UiUtils = UiUtils;
 		LIB.proj = proj;
 
-		await scriptList()
-		//return await createOrRecreateSpaceIndex()
-		await selectConfigSheet()
-		await isDocumentAttrAvailable()
-		await isAssetPropsAvailable()
-		await isSpacePropsAvailable()
-		await setLocalScriptPath()
-
-		//Check all userGroup from Sheet
-		await isUserGroupAvailable()
-		await createUserGroups()
-		await userConfigsLoader()
-		await scriptsLoader()
-		await updateFilecreateOrRecreateIndex()
-		await createOrRecreateCollectionsCollection()
-        //Bim Type mapped
-		await typeMapLoader()
-        //Document Attribute sheet mapped
-		await setupCDELoader()
-
-        //Model upload and import
-		await modelUploadAndImport(callback)
-
-		//create relation between space and asset
-		await createAssetSpaceReln() 
+			await scriptList()
+			await selectConfigSheet()
+		
+			if(await validate()){
+				await isDocumentAttrAvailable()
+				await isAssetPropsAvailable()
+				await isSpacePropsAvailable()
+				await setLocalScriptPath()
+		
+				//Check all userGroup from Sheet
+				await isUserGroupAvailable()
+				await createUserGroups()
+				await userConfigsLoader()
+				await scriptsLoader()
+				await updateFilecreateOrRecreateIndex()
+				await createOrRecreateCollectionsCollection()
+				//Bim Type mapped
+				await typeMapLoader()
+				//Document Attribute sheet mapped
+				await setupCDELoader()
+		
+				//Model upload and import
+				await modelUploadAndImport(callback)
+		
+				//create relation between space and asset
+				await createAssetSpaceReln()
+			} 
 	}
 }
 

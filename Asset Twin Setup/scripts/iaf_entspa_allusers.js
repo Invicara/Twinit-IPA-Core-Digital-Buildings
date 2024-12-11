@@ -289,36 +289,6 @@ let entspa = {
         }
         return space
     },
-    async getSpaceFromModelSgpk(input, libraries, ctx, callback) {
-
-        console.log('inputgetAssetFromModel', input)
-        const { IafScriptEngine } = libraries.PlatformApi
-        let iaf_space_collection = IafScriptEngine.getVar('iaf_space_collection')
-        console.log(iaf_space_collection, _.trim(input.modelInfo.id))
-        let space_query = {
-            query: { "properties.ItemGUID.val": _.trim(input.modelInfo.id) },
-            collectionDesc: {
-                _userType: iaf_space_collection._userType,
-                _userItemId: iaf_space_collection._userItemId
-            },
-            options: { page: { getAllItems: true } }
-        }
-        let queryResults = await IafScriptEngine.getItems(space_query, ctx)
-        console.log('queryResults', queryResults)
-        let space = null
-        if (queryResults.length > 0) {
-            space = queryResults.map(space => {
-                return {
-                    "Entity Name": space['Space Name'],
-                    properties: space.properties,
-                    modelViewerIds: space.properties.ItemGUID.val,
-                }
-            })[0]
-        }
-        console.log('space', space)
-        return space
-
-    },
 }
 
 export default entspa

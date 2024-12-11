@@ -1,5 +1,6 @@
 let files = {
     async loadFileAttributes(input, libraries, ctx) {
+        try{
         let { PlatformApi } = libraries
         let proj = await PlatformApi.IafProj.getCurrent(ctx)
 
@@ -28,8 +29,11 @@ let files = {
             props.push({ prop: attributeKeys[i].key, dName: attributeKeys[i].key });
         }
         console.log(props, "props")
-        PlatformApi.IafScriptEngine.setVar('iaf_attributeDisplayNames', props)
-    },
+        return PlatformApi.IafScriptEngine.setVar('iaf_attributeDisplayNames', props)
+    } catch(e){
+        console.log('Error to load file attributes!')
+    }
+},
     async getFileAttributeSelects(input, libraries, ctx) {
         let { PlatformApi } = libraries
         let iaf_ext_files_coll = await PlatformApi.IafScriptEngine.getVar('iaf_ext_files_coll')
