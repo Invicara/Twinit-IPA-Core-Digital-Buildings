@@ -3295,7 +3295,7 @@ async function getScriptData(fileName) {
 	CONFIGVARS.scriptNames.add(fileName)
 	let actualPath = LIB.localScriptPath[0].substr(-1) !== '/' ? LIB.localScriptPath[0] + '/' : LIB.localScriptPath[0]
 	console.log(actualPath,'actualPath');
-	let oneClickPath = 'Solution Engineering/OneClick Project/scripts/'
+	let oneClickPath = 'scripts/'
 	let filenames = fs.readdirSync(actualPath + oneClickPath);
 	filenames.forEach(file => {
 	if(file.split('.')[0] == fileName){
