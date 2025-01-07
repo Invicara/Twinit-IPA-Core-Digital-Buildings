@@ -1,6 +1,7 @@
 
 let RunnableScripts = [
-	{ name: "Easy Asset Twin Setup", script: "easyAssetTwinSetup" }
+	{ name: "Easy Asset Twin Project Setup", script: "easyAssetTwinSetup" },
+	{ name: "Update Easy Asset Twin Project", script: "updateEasyAssetProject" }
 ]
 
 import fs from 'fs'
@@ -18,6 +19,7 @@ const LIB = {
 	localScriptPath: null,
 	scriptAvailable: null,
 	xlsConfigDataParsed: null,
+	updateFlag: false
   };
 
 const CONFIGVARS = {} 
@@ -34,6 +36,21 @@ CONFIGVARS.configContents = []
 CONFIGVARS.scriptNames = new Set([])
 CONFIGVARS.scriptContents = []
 CONFIGVARS.scriptsDescriptors = []
+
+CONFIGVARS.solManUserDetails = [
+	{
+		"UserGroup": "Project Admin",
+		"UserGroupName": "Solution Admin",
+		"Assets": "Yes",
+		"Spaces": "Yes",
+		"Files": "Yes",
+		"ModelElements": "Yes",
+		"Collections": "Yes",
+		"BIMPK Upload": "No",
+		"SGPK Upload": "Yes",
+		"Navigator": "Yes"
+	}
+]
 
 CONFIGVARS.solutionAdmin = {
 	_name: 'Solutions Admin',
@@ -2018,9 +2035,9 @@ CONFIGVARS.scriptsDescriptorsAssetMapType = {
 }
 
 CONFIGVARS.scriptsDescriptorsModelRepValidation = {
-	_name: "Model Reporting and Validation",
+	_name: "Export Data Script",
 	_shortName: "iaf_ext_val_scr",
-	_description: "Scripts to Inspect Model Content and Generate Reports",
+	_description: "Scripts to Export Data",
 	_userType: "iaf_ext_val_scr"
 }
 
@@ -2074,7 +2091,7 @@ async function validate(){
 	}
 	console.log(statusArr,'status');
 	let statusFiltered = Object.fromEntries(
-		Object.entries(statusArr).filter(([key, value]) => value === 'Not Available') )
+	Object.entries(statusArr).filter(([key, value]) => value === 'Not Available') )
 	console.log(statusFiltered,'statusFiltered');
 	if(Object.keys(statusFiltered).length){
 		let sheetArrays = [{ sheetName: "Missing Sheet Report", objects: [statusFiltered] }]
@@ -2210,20 +2227,7 @@ async function isUserGroupAvailable() {
 		CONFIGVARS.userGroupDescriptors.push(CONFIGVARS.solutionAdmin)
 		CONFIGVARS.userConfigDescriptors.push(CONFIGVARS.userConfigSolutionAdmin)
 		CONFIGVARS.userConfigToUserGroupMap.push(CONFIGVARS.userConfigToUserGroupMapSolAdmin)
-		let findUser = [
-			{
-				"UserGroup": "Project Admin",
-				"UserGroupName": "Solution Admin",
-				"Assets": "Yes",
-				"Spaces": "Yes",
-				"Files": "Yes",
-				"ModelElements": "Yes",
-				"Collections": "Yes",
-				"BIMPK Upload": "No",
-				"SGPK Upload": "Yes",
-				"Navigator": "Yes"
-			}
-		]
+		let findUser = CONFIGVARS.solManUserDetails
 		await loadScripts(findUser)
 		Object.assign(CONFIGVARS.updateUserConfigContent,
 			{
@@ -2494,6 +2498,28 @@ async function modelUploadAndImport(callback){
 				let bimpkFileName = filePathForBimpK.substring(filePathForBimpK.lastIndexOf('/') + 1)
 				console.log(bimpkFileName,'bimpkFileName');
 				let getExtName = bimpkFileName.split('.')[1]
+				if(getExtName == 'bimpk'){
+					if(isScriptExists('iaf_bimpk_post_imp')){
+						CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsBimpkPost)
+						await getScriptData('iaf_bimpk_post_imp')
+					}
+					if(isScriptExists('iaf_import_model')){
+						CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsModelImport, CONFIGVARS.scriptsDescriptorsMapElems)
+						await getScriptData('iaf_import_model')
+					}
+					await createOrRecreateBIMPKOrSgpkDatasource(getExtName)
+				}
+				if(getExtName == 'sgpk'){
+					if(isScriptExists('iaf_sgpk_allusers')){
+						CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsSgpk)
+						await getScriptData('iaf_sgpk_allusers')
+					}
+					if(isScriptExists('iaf_import_model')){
+						CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsModelImport)
+						await getScriptData('iaf_import_model')
+					}
+					await createOrRecreateBIMPKOrSgpkDatasource(getExtName)
+				}
 				const uploadFileResults = await new Promise((resolve) =>
 					setTimeout(async () => {
 						await uploadFiles(callback, filePathForBimpK, bimpkFileName)
@@ -2507,66 +2533,33 @@ async function modelUploadAndImport(callback){
 				if (results === "true") {
 					console.log("bimpk-loadedsuccessfully")
 					//Import Model Asset Sheet
-					if (checkImportListAccess('Assets')) {
-						const xlsAssetPropInfo = LIB.wbJSON["Asset Property Info"];
-						let xlsAssetData = LIB.wbJSON.Assets
-						if(xlsAssetData && xlsAssetPropInfo){
-							let assetDataParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsAssetData });
-							let assetPropInfoParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsAssetPropInfo });
-							await importModeledAssets(assetDataParsed, assetPropInfoParsed, 'yesModel')
+						if(checkImportListAccess('Assets')){
+							await importModeledAssets('yesModel')
 						} else {
-							throw new Error('Missing Property Info Tab or Asset sheet!')
+							console.log('Missing required sheet!')
 						}
-					}
 					//Import Model Space Sheet
-					if (checkImportListAccess('Spaces')) {
-						const xlsSpacePropInfo = LIB.wbJSON["Space Property Info"];
-						console.log(xlsSpacePropInfo, "space property info")
-						let xlsSpaceData = LIB.wbJSON.Spaces
-						console.log(xlsSpaceData, "xlsSpaceData")
-						if(xlsSpaceData && xlsSpacePropInfo){
-							let spaceDataParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsSpaceData });
-							console.log(spaceDataParsed, "spaceDataParsed")
-							let spacePropInfoParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsSpacePropInfo });
-							console.log(spacePropInfoParsed, "spacePropInfoParsed")
-							await importModeledSpaces(spaceDataParsed, spacePropInfoParsed,'yesModel')
+						if(checkImportListAccess('Spaces')){
+							await importModeledSpaces('yesModel')
 						} else {
-							throw new Error('Missing Property Info Tab or Space sheet!')
+							console.log('Missing Property Info Tab or Space sheet!')
 						}
-					}
 				}
 			}
 			else {
 				//Import Model Asset Sheet
-
-				if (checkImportListAccess('Assets')) {
-					const xlsAssetPropInfo = LIB.wbJSON["Asset Property Info"];
-					let xlsAssetData = LIB.wbJSON.Assets
-					if(xlsAssetData && xlsAssetPropInfo){
-						let assetDataParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsAssetData });
-						let assetPropInfoParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsAssetPropInfo });
-						await importModeledAssets(assetDataParsed, assetPropInfoParsed,'noModel')
+					if(checkImportListAccess('Assets')){
+						await importModeledAssets('noModel')
 					} else {
-						throw new Error('Missing Property Info Tab or Asset sheet!')
+						console.log('Missing required sheet!')
 					}
 
-				}
 				//Import Model Space Sheet
-				if (checkImportListAccess('Spaces')) {
-					const xlsSpacePropInfo = LIB.wbJSON["Space Property Info"];
-					console.log(xlsSpacePropInfo, "space property info")
-					let xlsSpaceData = LIB.wbJSON.Spaces
-					console.log(xlsSpaceData, "xlsSpaceData")
-					if(xlsSpaceData && xlsSpacePropInfo){
-						let spaceDataParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsSpaceData });
-						console.log(spaceDataParsed, "spaceDataParsed")
-						let spacePropInfoParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsSpacePropInfo });
-						console.log(spacePropInfoParsed, "spacePropInfoParsed")
-						await importModeledSpaces(spaceDataParsed, spacePropInfoParsed,'noModel')
+					if(checkImportListAccess('Spaces')){
+						await importModeledSpaces('noModel')
 					} else {
-						throw new Error('Missing Property Info Tab or Space sheet!')
+						console.log('Missing required sheet!')
 					}
-				}
 
 			}
 			resolve("true")
@@ -2592,9 +2585,17 @@ async function createRelation(parentId, userItemId, relatedItems){
 	}
 }
 
-async function importModeledAssets(iaf_dt_grid_as_objects, data_as_objects, modelFlag) {
+async function importModeledAssets(modelFlag) {
 
 	try{
+		const xlsAssetPropInfo = LIB.wbJSON["Asset Property Info"];
+		let xlsAssetData = LIB.wbJSON.Assets
+		if(!xlsAssetPropInfo && !xlsAssetData){
+			console.log('Required Asset sheet is missing!')
+			return
+		}
+		let iaf_dt_grid_as_objects = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsAssetData });
+		let data_as_objects = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsAssetPropInfo });
 	//filter out those rows with no Asset Name
 	let assetRows = _.filter(iaf_dt_grid_as_objects, (row) => _.size(row['Asset Name']) > 0)
 
@@ -2747,8 +2748,17 @@ async function importModeledAssets(iaf_dt_grid_as_objects, data_as_objects, mode
 	}
 }
 
-async function importModeledSpaces(iaf_dt_grid_as_objects, data_as_objects, modelFlag) {
+async function importModeledSpaces(modelFlag) {
 	try{
+		const xlsSpacePropInfo = LIB.wbJSON["Space Property Info"];
+		let xlsSpaceData = LIB.wbJSON.Spaces
+		if(!xlsSpaceData && !xlsSpacePropInfo){
+			console.log('Missing required Sheet!');
+			return
+			
+		}
+		let iaf_dt_grid_as_objects = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsSpaceData });
+		let data_as_objects = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsSpacePropInfo });
 	//filter out those rows with no space Name
 	let spaceRows = _.filter(iaf_dt_grid_as_objects, (row) => _.size(row['Space Name']) > 0)
 
@@ -2942,7 +2952,7 @@ async function uploadFiles(callback, filePathForBimpK, bimpkFileName) {
 	function onUploadProgress(bytesUploaded, bytesTotal, file) {
 		let percentComplete = (bytesUploaded / bytesTotal * 100).toFixed(1)
 		let message = file.name + ': ' + percentComplete
-		console.log(message)
+		console.log(message,'%')
 		callback(message)
 	}
 	// we will provide an onError callback as well to the upload function
@@ -3106,10 +3116,8 @@ function checkImportListAccess(funcName){
 	}
 }
 
-async function importModelFile(extName) {
-
-	try{
-	let { IafFileSvc, IafDataSource } = LIB.PlatformApi
+async function getExistingModel(extName){
+	let { IafFileSvc } = LIB.PlatformApi
 
 	let searchCriteria = {
 		_parents: 'root',
@@ -3117,7 +3125,15 @@ async function importModelFile(extName) {
 	}
 
 	let getBimpks = await IafFileSvc.getFiles(searchCriteria, LIB.ctx, { _pageSize: 100, getLatestVersion: true });
-	let bimpkOrSgpk = getBimpks._list[0];
+	return getBimpks._list[0]
+}
+
+async function importModelFile(extName) {
+
+	try{
+	let { IafFileSvc, IafDataSource } = LIB.PlatformApi
+
+	let bimpkOrSgpk = await getExistingModel(extName);
 
 	console.log('bimpkOrSgpk', bimpkOrSgpk)
 
@@ -3214,7 +3230,7 @@ async function createAssetSpaceReln(){
 	try{
 	    const xlsAssetPropInfo = LIB.wbJSON["Asset Property Info"];
 		const xlsSpacePropInfo = LIB.wbJSON["Space Property Info"];
-		if(xlsAssetPropInfo && xlsSpacePropInfo && checkImportListAccess('Assets') && checkImportListAccess('Spaces')){
+		if(xlsAssetPropInfo && xlsSpacePropInfo){
 			let assetPropParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsAssetPropInfo })
 			let spacePropParsed = LIB.UiUtils.IafDataPlugin.parseGridData({ gridData: xlsSpacePropInfo })
 		
@@ -3335,172 +3351,7 @@ function getTableViewProps(props){
 	}
 }
 
-
-async function loadScripts(findUser) {
-
-	try{
-		let assetTableProperty = getTableViewProps(LIB.assetAttributeCommonName['tableView'])
-		console.log(assetTableProperty,'assetTableProperty');
-
-		let spaceTableProperty = getTableViewProps(LIB.spaceAttributeCommonName['tableView'])
-		console.log(spaceTableProperty,'spaceTableProperty');
-
-	if (findUser[0]["Navigator"] == "Yes") {
-		Object.assign(CONFIGVARS.updateUserConfigContent,
-			{
-				handlers: {
-					...CONFIGVARS.updateUserConfigContent.handlers,
-					navigator: CONFIGVARS.handlersNavigator.handlers.navigator
-				},
-			},
-			{
-				entitySelectConfig: {
-					...CONFIGVARS.updateUserConfigContent.entitySelectConfig,
-					Space: CONFIGVARS.entitySelectConfigSpaces.entitySelectConfig.Space
-				}
-			}
-		)
-		if(findUser[0]['SGPK Upload'] == "Yes"){
-			let getAssetScriptObj = CONFIGVARS.handlersNavigator.handlers.navigator.config.entityData.Asset
-			let getSpaceScriptObj = CONFIGVARS.handlersNavigator.handlers.navigator.config.entityData.Space
-			getAssetScriptObj.script = "getAssetsSgpk"
-			getSpaceScriptObj.script = "getSpacesSgpk"
-			getAssetScriptObj.getEntityFromModel = 'getAssetFromModelSgpk'
-			getSpaceScriptObj.getEntityFromModel = 'getSpaceFromModelSgpk'
-		}
-		CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages.push(CONFIGVARS.groupedPagesAssetTwinNav)
-		if(CONFIGVARS.updateUserConfigContent.handlers.navigator.config.tableView.Asset.component.columns.length === 1 && assetTableProperty){
-			CONFIGVARS.updateUserConfigContent.handlers.navigator.config.tableView.Asset.component.columns.push(...assetTableProperty)
-		}
-		if(CONFIGVARS.updateUserConfigContent.handlers.navigator.config.tableView.Space.component.columns.length === 1 && spaceTableProperty){
-			CONFIGVARS.updateUserConfigContent.handlers.navigator.config.tableView.Space.component.columns.push(...spaceTableProperty)
-		}
-	}
-
-
-	if (findUser[0]["ModelElements"] == "Yes" && isScriptExists("iaf_dt_model_elems")) {
-		CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsModelElements)
-		await getScriptData('iaf_dt_model_elems')
-		Object.assign(CONFIGVARS.updateUserConfigContent,
-			{
-				entityDataConfig: {
-					...CONFIGVARS.updateUserConfigContent.entityDataConfig,
-					"Model Element": CONFIGVARS.entityDataConfigModelElements.entityDataConfig["Model Element"]
-				}
-			},
-			{
-				entitySelectConfig: {
-					...CONFIGVARS.updateUserConfigContent.entitySelectConfig,
-					"Model Element": CONFIGVARS.entitySelectConfigModelElement.entitySelectConfig["Model Element"]
-				}
-			},
-			{
-				handlers: {
-					...CONFIGVARS.updateUserConfigContent.handlers,
-					modelelems: CONFIGVARS.handlersModelElements.handlers.modelelems
-				}
-			})
-			CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages.push(CONFIGVARS.groupedPagesAssetTwinModelElement)
-	}
-
-
-	if (findUser[0]["BIMPK Upload"] == "Yes" && findUser[0]["SGPK Upload"] == "No" && isScriptExists("iaf_bimpk_post_imp")) {
-		CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsBimpkPost,CONFIGVARS.scriptsDescriptorsModelImport, CONFIGVARS.scriptsDescriptorsMapElems)
-		await getScriptData('iaf_bimpk_post_imp')
-		await getScriptData('iaf_import_model')
-		await createOrRecreateBIMPKOrSgpkDatasource('bimpk')
-	}
-
-	if (findUser[0]["SGPK Upload"] == "Yes" && findUser[0]["BIMPK Upload"] == "No" && isScriptExists("iaf_sgpk_allusers")) {
-		CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsModelImport, CONFIGVARS.scriptsDescriptorsSgpk)
-		await getScriptData('iaf_sgpk_allusers')
-		await getScriptData('iaf_import_model')
-		await createOrRecreateBIMPKOrSgpkDatasource('sgpk')
-	}
-
-	if (findUser[0]["Assets"] == "Yes" && isScriptExists("iaf_entass_allusers")) {
-		CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsAssets)
-		await getScriptData('iaf_entass_allusers')
-		Object.assign(CONFIGVARS.updateUserConfigContent,
-			{
-				entityDataConfig: {
-					...CONFIGVARS.updateUserConfigContent.entityDataConfig,
-					Asset: CONFIGVARS.entityDataConfigAssets.entityDataConfig.Asset
-				}
-			},
-			{
-				entitySelectConfig: {
-					...CONFIGVARS.updateUserConfigContent.entitySelectConfig,
-					Asset: CONFIGVARS.entitySelectConfigAssets.entitySelectConfig.Asset
-				}
-			},
-			{
-				handlers: {
-					...CONFIGVARS.updateUserConfigContent.handlers,
-					assets: CONFIGVARS.handlersAsset.handlers.assets
-				}
-			})
-
-		if(findUser[0]['SGPK Upload'] == "Yes"){
-			let getTreeConfig = CONFIGVARS.entitySelectConfigAssets.entitySelectConfig.Asset[1]
-			if(getTreeConfig.id == 'treesearch'){
-				getTreeConfig.treeLevels[0].property = 'Category'
-				getTreeConfig.treeLevels[0].script = 'getCategoriesWithCountSgpk'
-				getTreeConfig.treeLevels[1].property = 'Type'
-				getTreeConfig.treeLevels[1].script = 'getTypesWithChildrenCountSgpk'
-			}
-		}
-
-		CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages.push(CONFIGVARS.groupedPagesAssetTwinAsset)
-		if(CONFIGVARS.updateUserConfigContent.handlers.assets.config.tableView.component.columns.length === 1 && assetTableProperty){
-			console.log(...assetTableProperty,'...assetTableProperty')
-			CONFIGVARS.updateUserConfigContent.handlers.assets.config.tableView.component.columns.push(...assetTableProperty)
-		}
-		if(CONFIGVARS.updateUserConfigContent.entityDataConfig.Asset["Asset Properties"].component.hidden.length === 0 && LIB.assetAttributeCommonName['hiddenProps']){
-			CONFIGVARS.updateUserConfigContent.entityDataConfig.Asset["Asset Properties"].component.hidden.push(...LIB.assetAttributeCommonName['hiddenProps'])
-		}
-		if(Object.values(CONFIGVARS.updateUserConfigContent.entityDataConfig.Asset["Asset Properties"].component.groups).length === 0 && LIB.assetAttributeCommonName['groups']){
-			CONFIGVARS.updateUserConfigContent.entityDataConfig.Asset["Asset Properties"].component.groups = LIB.assetAttributeCommonName['groups']; 
-		}
-	}
-
-
-	if (findUser[0]["Spaces"] == "Yes" && isScriptExists("iaf_entspa_allusers")) {
-		CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsSpace)
-		await getScriptData('iaf_entspa_allusers')
-		Object.assign(CONFIGVARS.updateUserConfigContent,
-			{
-				entityDataConfig: {
-					...CONFIGVARS.updateUserConfigContent.entityDataConfig,
-					Space: CONFIGVARS.entityDataConfigSpaces.entityDataConfig.Space
-				}
-			},
-			{
-				entitySelectConfig: {
-					...CONFIGVARS.updateUserConfigContent.entitySelectConfig,
-					Space: CONFIGVARS.entitySelectConfigSpaces.entitySelectConfig.Space
-				}
-			},
-			{
-				handlers: {
-					...CONFIGVARS.updateUserConfigContent.handlers,
-					spaces: CONFIGVARS.handlersSpace.handlers.spaces
-				}
-			})
-		CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages.push(CONFIGVARS.groupedPagesAssetTwinSpace)
-		if(CONFIGVARS.updateUserConfigContent.handlers.spaces.config.tableView.component.columns.length === 1 && spaceTableProperty){
-			console.log(...spaceTableProperty,'...spaceTableProperty')
-			CONFIGVARS.updateUserConfigContent.handlers.spaces.config.tableView.component.columns.push(...spaceTableProperty)
-		}
-		console.log(CONFIGVARS.updateUserConfigContent.entityDataConfig.Space["Space Properties"].component.hidden.length,'spacelength')
-		if(CONFIGVARS.updateUserConfigContent.entityDataConfig.Space["Space Properties"].component.hidden.length === 0 && LIB.spaceAttributeCommonName['hiddenProps']){
-			CONFIGVARS.updateUserConfigContent.entityDataConfig.Space["Space Properties"].component.hidden.push(...LIB.spaceAttributeCommonName['hiddenProps'])
-		}
-		if(Object.values(CONFIGVARS.updateUserConfigContent.entityDataConfig.Space["Space Properties"].component.groups).length === 0 && LIB.spaceAttributeCommonName['groups']){
-			CONFIGVARS.updateUserConfigContent.entityDataConfig.Space["Space Properties"].component.groups = LIB.spaceAttributeCommonName['groups']; 
-		}
-	}
-
+async function isFilesAvailable(findUser){
 	let arrayOFItems, arrayOFItemsFilePropertyUI, fileTableProperty, editPropertyFileCollection
 	if(checkImportListAccess('DocumentAttributes')){
 		arrayOFItems = LIB.documentAttributeCommonName.map(data => {
@@ -3545,9 +3396,11 @@ async function loadScripts(findUser) {
 		});
 	}
 
-	if (findUser[0]["Files"] == "Yes" && isScriptExists("iaf_files_allusers")) {
-		CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsFiles)
-		await getScriptData('iaf_files_allusers')
+	if ((findUser[0]["Files"] == "Yes" && isScriptExists("iaf_files_allusers")) || (findUser[0]["Files"] == "Yes" && LIB.updateFlag)) {
+		if(isScriptExists('iaf_files_allusers')){
+			CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsFiles)
+			await getScriptData('iaf_files_allusers')
+		}
 
 		Object.assign(CONFIGVARS.updateUserConfigContent,
 			{
@@ -3583,7 +3436,7 @@ async function loadScripts(findUser) {
 			CONFIGVARS.updateUserConfigContent.handlers.files.config.tableView.component.columns.push(...fileTableProperty)
 		}
 		console.log(CONFIGVARS.updateUserConfigContent.handlers.fileUpload.config.columns.length, "filesLength2")
-		if (CONFIGVARS.updateUserConfigContent.handlers.fileUpload.config.columns.length === 0 && checkImportListAccess('DocumentAttributes')) {
+		if (CONFIGVARS.updateUserConfigContent.handlers.fileUpload.config.columns.length === 0 && arrayOFItems) {
 			console.log('arrayOFItems', arrayOFItems)
 			CONFIGVARS.updateUserConfigContent.handlers.fileUpload.config.columns.push(...arrayOFItems)
 		}
@@ -3592,6 +3445,226 @@ async function loadScripts(findUser) {
 			CONFIGVARS.updateUserConfigContent.groupedPages["Files"].pages.push(CONFIGVARS.groupedPagesAssetTwinFileUpload)
 		}
 	}
+}
+
+async function isAssetAvailable(findUser){
+	let assetTableProperty 
+	if(checkImportListAccess('Assets')){
+		assetTableProperty = getTableViewProps(LIB.assetAttributeCommonName['tableView'])
+	}
+	console.log(assetTableProperty,'assetTableProperty');
+	if ((findUser[0]["Assets"] == "Yes" && isScriptExists("iaf_entass_allusers")) || (LIB.updateFlag && findUser[0]["Assets"] == "Yes")) {
+		if(isScriptExists('iaf_entass_allusers')){
+			CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsAssets)
+			await getScriptData('iaf_entass_allusers')
+		}
+		Object.assign(CONFIGVARS.updateUserConfigContent,
+			{
+				entityDataConfig: {
+					...CONFIGVARS.updateUserConfigContent.entityDataConfig,
+					Asset: CONFIGVARS.entityDataConfigAssets.entityDataConfig.Asset
+				}
+			},
+			{
+				entitySelectConfig: {
+					...CONFIGVARS.updateUserConfigContent.entitySelectConfig,
+					Asset: CONFIGVARS.entitySelectConfigAssets.entitySelectConfig.Asset
+				}
+			},
+			{
+				handlers: {
+					...CONFIGVARS.updateUserConfigContent.handlers,
+					assets: CONFIGVARS.handlersAsset.handlers.assets
+				}
+			})
+
+			console.log(CONFIGVARS.entitySelectConfigAssets.entitySelectConfig.Asset[1],'sgpkScript');
+			
+		if(findUser[0]['SGPK Upload'] == "Yes" && checkImportListAccess('Assets')){
+			console.log(findUser[0],'findUser-->');
+			
+			let getTreeConfig = CONFIGVARS.entitySelectConfigAssets.entitySelectConfig.Asset[1]
+			if(getTreeConfig.id == 'treesearch'){
+				console.log(getTreeConfig,'getTreeConfig');
+				getTreeConfig.treeLevels[0].property = 'Category'
+				getTreeConfig.treeLevels[0].script = 'getCategoriesWithCountSgpk'
+				getTreeConfig.treeLevels[1].property = 'Type'
+				getTreeConfig.treeLevels[1].script = 'getTypesWithChildrenCountSgpk'
+				console.log(getTreeConfig,'getTreeConfig after addition');
+				
+			}
+		}
+
+		let assetInPages = CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages
+		console.log(assetInPages,'assetInPages');
+		
+		if(uniquePages(assetInPages, CONFIGVARS.groupedPagesAssetTwinAsset)){
+			CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages.push(CONFIGVARS.groupedPagesAssetTwinAsset)
+		}
+
+		if(CONFIGVARS.updateUserConfigContent.handlers.assets.config.tableView.component.columns.length === 1 && assetTableProperty){
+			console.log(...assetTableProperty,'...assetTableProperty')
+			CONFIGVARS.updateUserConfigContent.handlers.assets.config.tableView.component.columns.push(...assetTableProperty)
+		}
+		if(CONFIGVARS.updateUserConfigContent.entityDataConfig.Asset["Asset Properties"].component.hidden.length === 0 && LIB.assetAttributeCommonName['hiddenProps']){
+			CONFIGVARS.updateUserConfigContent.entityDataConfig.Asset["Asset Properties"].component.hidden.push(...LIB.assetAttributeCommonName['hiddenProps'])
+		}
+		if(Object.values(CONFIGVARS.updateUserConfigContent.entityDataConfig.Asset["Asset Properties"].component.groups).length === 0 && LIB.assetAttributeCommonName['groups']){
+			CONFIGVARS.updateUserConfigContent.entityDataConfig.Asset["Asset Properties"].component.groups = LIB.assetAttributeCommonName['groups']; 
+		}
+	}
+}
+
+async function isSpaceAvailable(findUser){
+	let spaceTableProperty
+	if(checkImportListAccess('Spaces')){
+		spaceTableProperty = getTableViewProps(LIB.spaceAttributeCommonName['tableView'])
+	}
+	console.log(spaceTableProperty,'spaceTableProperty');
+	if ((findUser[0]["Spaces"] == "Yes" && isScriptExists("iaf_entspa_allusers")) || (findUser[0]["Spaces"] == "Yes" && LIB.updateFlag)) {
+		if(isScriptExists('iaf_entspa_allusers')){
+			CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsSpace)
+			await getScriptData('iaf_entspa_allusers')
+		}
+		Object.assign(CONFIGVARS.updateUserConfigContent,
+			{
+				entityDataConfig: {
+					...CONFIGVARS.updateUserConfigContent.entityDataConfig,
+					Space: CONFIGVARS.entityDataConfigSpaces.entityDataConfig.Space
+				}
+			},
+			{
+				entitySelectConfig: {
+					...CONFIGVARS.updateUserConfigContent.entitySelectConfig,
+					Space: CONFIGVARS.entitySelectConfigSpaces.entitySelectConfig.Space
+				}
+			},
+			{
+				handlers: {
+					...CONFIGVARS.updateUserConfigContent.handlers,
+					spaces: CONFIGVARS.handlersSpace.handlers.spaces
+				}
+			})
+		let spaceInPages = CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages
+		console.log(spaceInPages,'spaceInPages');
+		
+		if(uniquePages(spaceInPages, CONFIGVARS.groupedPagesAssetTwinSpace)){
+			CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages.push(CONFIGVARS.groupedPagesAssetTwinSpace)
+		}
+		if(CONFIGVARS.updateUserConfigContent.handlers.spaces.config.tableView.component.columns.length === 1 && spaceTableProperty){
+			console.log(...spaceTableProperty,'...spaceTableProperty')
+			CONFIGVARS.updateUserConfigContent.handlers.spaces.config.tableView.component.columns.push(...spaceTableProperty)
+		}
+		console.log(CONFIGVARS.updateUserConfigContent.entityDataConfig.Space["Space Properties"].component.hidden.length,'spacelength')
+		if(CONFIGVARS.updateUserConfigContent.entityDataConfig.Space["Space Properties"].component.hidden.length === 0 && LIB.spaceAttributeCommonName['hiddenProps']){
+			CONFIGVARS.updateUserConfigContent.entityDataConfig.Space["Space Properties"].component.hidden.push(...LIB.spaceAttributeCommonName['hiddenProps'])
+		}
+		if(Object.values(CONFIGVARS.updateUserConfigContent.entityDataConfig.Space["Space Properties"].component.groups).length === 0 && LIB.spaceAttributeCommonName['groups']){
+			CONFIGVARS.updateUserConfigContent.entityDataConfig.Space["Space Properties"].component.groups = LIB.spaceAttributeCommonName['groups']; 
+		}
+	}
+}
+
+function uniquePages(arr, obj){
+	return arr.findIndex(objs => objs.page === obj.page) === -1
+}
+async function isNavigatorAvailable(findUser){
+	let assetTableProperty 
+	if(checkImportListAccess('Assets')){
+		assetTableProperty = getTableViewProps(LIB.assetAttributeCommonName['tableView'])
+	}
+	console.log(assetTableProperty,'assetTableProperty');
+	let spaceTableProperty
+	if(checkImportListAccess('Spaces')){
+		spaceTableProperty = getTableViewProps(LIB.spaceAttributeCommonName['tableView'])
+	}
+if (findUser[0]["Navigator"] == "Yes") {
+	Object.assign(CONFIGVARS.updateUserConfigContent,
+		{
+			handlers: {
+				...CONFIGVARS.updateUserConfigContent.handlers,
+				navigator: CONFIGVARS.handlersNavigator.handlers.navigator
+			},
+		},
+		{
+			entitySelectConfig: {
+				...CONFIGVARS.updateUserConfigContent.entitySelectConfig,
+				Space: CONFIGVARS.entitySelectConfigSpaces.entitySelectConfig.Space
+			}
+		}
+	)
+	if(findUser[0]['SGPK Upload'] == "Yes"){
+		let getAssetScriptObj = CONFIGVARS.handlersNavigator.handlers.navigator.config.entityData.Asset
+		let getSpaceScriptObj = CONFIGVARS.handlersNavigator.handlers.navigator.config.entityData.Space
+		getAssetScriptObj.script = "getAssetsSgpk"
+		getSpaceScriptObj.script = "getSpacesSgpk"
+		getAssetScriptObj.getEntityFromModel = 'getAssetFromModelSgpk'
+		getSpaceScriptObj.getEntityFromModel = 'getSpaceFromModelSgpk'
+	}
+	let navPages = CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages
+	console.log(navPages,'navPages');
+	
+	if(uniquePages(navPages, CONFIGVARS.groupedPagesAssetTwinNav)){
+		navPages.push(CONFIGVARS.groupedPagesAssetTwinNav)
+	}
+	if(CONFIGVARS.updateUserConfigContent.handlers.navigator.config.tableView.Asset.component.columns.length === 1 && checkImportListAccess('Assets')){
+		CONFIGVARS.updateUserConfigContent.handlers.navigator.config.tableView.Asset.component.columns.push(...assetTableProperty)
+	}
+	if(CONFIGVARS.updateUserConfigContent.handlers.navigator.config.tableView.Space.component.columns.length === 1 && checkImportListAccess('Spaces')){
+		CONFIGVARS.updateUserConfigContent.handlers.navigator.config.tableView.Space.component.columns.push(...spaceTableProperty)
+	}
+}
+}
+
+async function loadScripts(findUser) {
+
+	try{
+
+	await isNavigatorAvailable(findUser)
+
+	if (findUser[0]["ModelElements"] == "Yes" && isScriptExists("iaf_dt_model_elems")) {
+		CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsModelElements)
+		await getScriptData('iaf_dt_model_elems')
+		Object.assign(CONFIGVARS.updateUserConfigContent,
+			{
+				entityDataConfig: {
+					...CONFIGVARS.updateUserConfigContent.entityDataConfig,
+					"Model Element": CONFIGVARS.entityDataConfigModelElements.entityDataConfig["Model Element"]
+				}
+			},
+			{
+				entitySelectConfig: {
+					...CONFIGVARS.updateUserConfigContent.entitySelectConfig,
+					"Model Element": CONFIGVARS.entitySelectConfigModelElement.entitySelectConfig["Model Element"]
+				}
+			},
+			{
+				handlers: {
+					...CONFIGVARS.updateUserConfigContent.handlers,
+					modelelems: CONFIGVARS.handlersModelElements.handlers.modelelems
+				}
+			})
+			CONFIGVARS.updateUserConfigContent.groupedPages["Asset Twin"].pages.push(CONFIGVARS.groupedPagesAssetTwinModelElement)
+	}
+
+
+	if (findUser[0]["BIMPK Upload"] == "Yes" && findUser[0]["SGPK Upload"] == "No" && isScriptExists("iaf_bimpk_post_imp")) {
+		CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsBimpkPost,CONFIGVARS.scriptsDescriptorsModelImport, CONFIGVARS.scriptsDescriptorsMapElems)
+		await getScriptData('iaf_bimpk_post_imp')
+		await getScriptData('iaf_import_model')
+		await createOrRecreateBIMPKOrSgpkDatasource('bimpk')
+	}
+
+	if (findUser[0]["SGPK Upload"] == "Yes" && findUser[0]["BIMPK Upload"] == "No" && isScriptExists("iaf_sgpk_allusers")) {
+		CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsModelImport, CONFIGVARS.scriptsDescriptorsSgpk)
+		await getScriptData('iaf_sgpk_allusers')
+		await getScriptData('iaf_import_model')
+		await createOrRecreateBIMPKOrSgpkDatasource('sgpk')
+	}
+
+	await isAssetAvailable(findUser)
+	await isSpaceAvailable(findUser)
+	await isFilesAvailable(findUser)
 
 	if (findUser[0]["Collections"] == "Yes" && isScriptExists("iaf_collect_allusers")) {
 		CONFIGVARS.scriptsDescriptors.push(CONFIGVARS.scriptsDescriptorsColls)
@@ -3732,6 +3805,72 @@ async function isSpacePropsAvailable(){
 	}
 }
 
+async function updateFiles(findUser, content) {
+	LIB.updateFlag = true
+
+	//If assets or spaces is updated then table view of navigator will be updated
+	if(checkImportListAccess('Assets') || checkImportListAccess('Spaces')){
+
+		//This function is used to update the table view of navigator
+		await isNavigatorAvailable(findUser)
+	}
+	if(checkImportListAccess('Assets')){
+
+		//If assets is yes in import list sheet then entityDataConfig, entitySelectConfig, handler will be updated
+		await isAssetAvailable(findUser)
+	}
+	if(checkImportListAccess('Spaces')){
+
+		//If spaces is yes in import list sheet then entityDataConfig, entitySelectConfig, handler will be updated
+		await isSpaceAvailable(findUser)
+	}
+	if(checkImportListAccess('DocumentAttributes')){
+
+		//If DocumentAttributes is yes in import list sheet then entityDataConfig, entitySelectConfig, handler will be updated
+		await isFilesAvailable(findUser)
+	}
+	console.log(CONFIGVARS.updateUserConfigContent,'updateUserConfigContent');
+	
+	// console.log(configJson,'JSON.stringify')
+	const userData = {_userData: JSON.stringify(CONFIGVARS.updateUserConfigContent)}
+	await LIB.PlatformApi.IafUserConfig.createVersion(content._id, userData, LIB.ctx);
+	Object.assign(CONFIGVARS.updateUserConfigContent, CONFIGVARS.resetUserConfigContent)
+}
+async function updateConfig(){
+	try{
+		const criteria = { 
+			_usertype: LIB.proj._usertype, 
+			_name: LIB.proj._name 
+		  };
+		  
+		  const userConfigs = await LIB.PlatformApi.IafUserConfig.getUserConfigs(criteria, LIB.ctx);
+
+		  for(let i = 0; i < userConfigs.length; i++){
+			let content = userConfigs[i]
+			if(content._shortName !== "iaf_dbm_soladmin_uc"){
+				console.log(content,'content');
+				let configJson = JSON.parse(content._versions[0]._userData)
+				console.log(configJson,'cont')
+				let findUser = LIB.xlsConfigDataParsed.filter(x => x.UserGroupName == content._name.replace('DBM ',''))
+				CONFIGVARS.updateUserConfigContent = configJson
+
+				//This function is used to update config files
+				//finduser has the user detaills eg: asset : yes, space : yes, navigator: no
+				//content has the config data
+				await updateFiles(findUser, content)
+			} else {
+				let configJson = JSON.parse(content._versions[0]._userData)
+				console.log(configJson,'cont')
+				CONFIGVARS.updateUserConfigContent = configJson
+				let findUser = CONFIGVARS.solManUserDetails
+				await updateFiles(findUser, content)
+			}
+		  }
+	} catch(e){
+		throw e
+	}
+}
+
 let ProjSetup = {
 
 
@@ -3753,34 +3892,161 @@ let ProjSetup = {
 		LIB.UiUtils = UiUtils;
 		LIB.proj = proj;
 
+			//This function used to check all the available scripts
 			await scriptList()
+
+			//This function used to select the config sheet
 			await selectConfigSheet()
 		
+			//This function used to validate the sheet
 			if(await validate()){
+				//This function is used to check table view data in Document Attributes sheet
+				//if table view data exist the table header names would be store in a variable documentAttributeCommonName
+				//and when load the scripts table headers would be added to the config
 				await isDocumentAttrAvailable()
+
+				//This function used to get asset properties from asset property info sheet eg: hidden, groups, property set and table view datas
+				//and set in a variabe to push into config file when condition matched
 				await isAssetPropsAvailable()
+
+				//This function used to get space propertis from space property info sheet eg: hidden, groups, property set and table view datas
+				//and set in a variabe to push into config file when condition matched
 				await isSpacePropsAvailable()
+
+				//This function used to set the local script path
 				await setLocalScriptPath()
 		
-				//Check all userGroup from Sheet
+				//This function is used to get user group details from config sheet eg: asset as Yes, space as No
+				//Load the script, create the handler for manage model and admin for solution admin and project admin usergroup 
 				await isUserGroupAvailable()
+
+				//This function is used to create the user group
 				await createUserGroups()
+
+				//This function is used to create userconfigs
 				await userConfigsLoader()
+
+				//This function is used to load the required scripts
 				await scriptsLoader()
+
+				//This function is used to create or recreate indexes for file
 				await updateFilecreateOrRecreateIndex()
+
+				//This functin is used to create or recreate collections collection and create index for the collection
 				await createOrRecreateCollectionsCollection()
-				//Bim Type mapped
+
+				//This function used to get bim type from sheet and create collection for bim type
 				await typeMapLoader()
-				//Document Attribute sheet mapped
+
+				//This function is used to create collection for FDM File Attrib Collection
+				//and create items using Document Attributes sheet objects
 				await setupCDELoader()
 		
-				//Model upload and import
+				//This function is used to upload the model and import the model
 				await modelUploadAndImport(callback)
 		
-				//create relation between space and asset
-				await createAssetSpaceReln()
+				//If assets and spaces is yes from import list sheet then relation will be created according to a unique property 
+				if(checkImportListAccess('Assets') && checkImportListAccess('Spaces')){
+					//This function is used to create relation between asset and space using a unique property
+					await createAssetSpaceReln()
+				}
 			} 
-	}
+	},
+	async updateEasyAssetProject(input, libraries, ctx, callback) {
+		
+		let { PlatformApi, UiUtils, IafScriptEngine } = libraries;
+		let proj = await PlatformApi.IafProj.getCurrent(ctx);
+		console.log(proj,'project');
+		
+
+		// LOAD ALL REUSABLE LIB
+		LIB.IafScriptEngine = IafScriptEngine;
+		LIB.PlatformApi = PlatformApi;
+		LIB.ctx = ctx;
+		LIB.input = input;
+		LIB.UiUtils = UiUtils;
+		LIB.proj = proj;
+
+		  
+		//This function used to check all the available scripts
+		await scriptList()
+		//This function used to select the config sheet
+		await selectConfigSheet()
+
+		//This function used to validate the sheet
+			if(await validate()){
+				//This function used to set the local script path
+				await setLocalScriptPath()
+		
+				//This function used to get bim type from sheet and create collection for bim type
+				await typeMapLoader()
+				//This function used to check assets from import list sheet 
+				if(checkImportListAccess('Assets')){
+					//This function used to get asset properties from asset property info sheet eg: hidden, groups, property set and table view datas
+					//and set in a variabe to push into config file when condition matched
+					await isAssetPropsAvailable()
+				}
+				//This function used to validate spaces from import list sheet
+				if(checkImportListAccess('Spaces')){
+					//This function used to get space propertis from space property info sheet eg: hidden, groups, property set and table view datas
+					//and set in a variabe to push into config file when condition matched
+					await isSpacePropsAvailable()
+				}
+				//This function is used to check DocumentAttributes from import list
+				if(checkImportListAccess('DocumentAttributes')){
+					//This function is used to check table view data in Document Attributes sheet
+					//if table view data exist the table header names would be store in a variable documentAttributeCommonName
+					//and when load the scripts table headers would be added to the config
+					await isDocumentAttrAvailable()
+					//This function is used to create collection for FDM File Attrib Collection
+					//and create items using Document Attributes sheet objects
+					await setupCDELoader()
+				}
+				//This function is used to get config data from server as json, update the config and save to server with new version 
+				await updateConfig()
+		
+				//This function is used to check model import from import list sheet. if yes then proceed
+				if(checkImportListAccess('ModelImport')){
+					//This function is used to upload the model and import the model 
+					await modelUploadAndImport(callback)
+				} else {
+					//This function is used to check if sgpk model exist or not in server
+					if(await getExistingModel('sgpk')) {
+						//This function is used to check assets in import list if yes and if model is exist then assets will be import
+						if(checkImportListAccess('Assets')){
+							//This function is used to import modeled assets
+							await importModeledAssets('yesModel')
+						}
+						//This function is used to check Spaces in import list if yes and if model is exist then spaces will be import
+						if(checkImportListAccess('Spaces')){
+							//This function is used to import modeled spaces
+							await importModeledSpaces('yesModel')
+						}
+					}
+					//This function is used to check if bimpk model exist in server
+					if(await getExistingModel('bimpk')){
+						//This function is used to check assets in import list if yes and if model is exist then assets will be import
+						if(checkImportListAccess('Assets')){
+							//This function is used to import modeled assets
+							await importModeledAssets('yesModel')
+						}
+						//This function is used to check Spaces in import list if yes and if model is exist then spaces will be import
+						if(checkImportListAccess('Spaces')){
+							//This function is used to import modeled spaces
+							await importModeledSpaces('yesModel')
+						}
+					}
+				} 
+				//This function is used to load the scripts in server
+				await scriptsLoader()
+				//If asset or space updated then relation will be created according to a unique property 
+				if(checkImportListAccess('Assets') || checkImportListAccess('Spaces')){
+					//This function is used to create relation between asset and space using a unique property
+					await createAssetSpaceReln()
+				}
+
+			} 
+	},
 }
 
 export default ProjSetup
