@@ -12,10 +12,38 @@ let extval = {
 
     //This function is used to generate BIM Type report
     async generateBIMTypeReport(input, libraries, ctx) {
-        let { PlatformApi, UiUtils } = libraries
-        let IAF_workspace = await PlatformApi.IafScriptEngine.getVar('IAF_workspace')
-        let iaf_ext_type_elem_coll = PlatformApi.IafScriptEngine.getVar('iaf_ext_type_elem_coll')
-        let iaf_dt_model_el_types = await PlatformApi.IafScriptEngine.getItems({
+        let { PlatformApi , IafScriptEngine, UiUtils} = libraries
+
+        let {IafProj} = PlatformApi
+
+        let IAF_workspace = await IafProj.getCurrent(ctx)
+
+        console.log("workspace", IAF_workspace)
+
+        let currentModel = await IafScriptEngine.getCompositeCollections({
+			query:
+			{
+				"_userType": "bim_model_version",
+				"_namespaces": { "$in": IAF_workspace._namespaces },
+				"_itemClass": "NamedCompositeItem"
+			}
+		}, ctx, { getLatestVersion: true });
+
+		if (!currentModel) return "No Model Present"
+   
+		let latestModelComposite;
+		if (currentModel && currentModel._list && currentModel._list.length) {
+		  latestModelComposite = _.last(_.sortBy(currentModel._list, m => m._metadata._updatedAt));
+		}
+
+		console.log("latestModelComposite",JSON.stringify(latestModelComposite))
+		
+		let iaf_ext_type_elem_coll = await IafScriptEngine.getCollectionInComposite(
+		latestModelComposite._userItemId, { _userType: "rvt_type_elements" }, ctx)
+
+		console.log("iaf_ext_type_elem_coll", iaf_ext_type_elem_coll)
+
+        let iaf_dt_model_el_types = await IafScriptEngine.getItems({
             collectionDesc: {
                 _userItemId: iaf_ext_type_elem_coll._userItemId,
                 _namespaces: IAF_workspace._namespaces
@@ -24,12 +52,12 @@ let extval = {
             options: { page: { getAllItems: true } }
         }, ctx)
         console.log('iaf_dt_model_el_types', iaf_dt_model_el_types)
-        let header = [["Revit Category", "baType", "Revit Family", "Revit Type", "dtCategory", "dtType"]]
+
+        let header = [["Revit Category", "Revit Family", "Revit Type", "dtCategory", "dtType"]]
         let assetTypes = iaf_dt_model_el_types.map(type => {
             //if (type.baType)
             return [
                 type.properties['Revit Category'].val,
-                type.baType ? type.baType : '',
                 type.properties['Revit Family'].val,
                 type.properties['Revit Type'].val,
                 type.dtCategory ? type.dtCategory : '',
@@ -38,13 +66,12 @@ let extval = {
         let assetTypeAsGrid = header.concat(assetTypes)
         let sheetArrays = [{ sheetName: "Sheet1", objects: assetTypeAsGrid }]
         console.log('shetArrays', sheetArrays)
-        let relationWorkbook = await UiUtils.IafDataPlugin.createWorkbookFromAoO(sheetArrays)
-        console.log('relationWorkbook', relationWorkbook)
-        let savedWorkbook = await UiUtils.IafDataPlugin.saveWorkbook({
-            workbook: relationWorkbook,
-            file: `${IAF_workspace._shortName}_BIMTypes.xlsx`
-        })
+        
+        let relationWorkbook = await UiUtils.IafDataPlugin.createWorkbookFromAoO(sheetArrays);
+
+        let savedWorkbook = await UiUtils.IafDataPlugin.saveWorkbook(relationWorkbook,"devConfig_BIMTypes.xlsx");
         console.log('savedWorkbook', savedWorkbook)
+
         return { "bimTypes": assetTypeAsGrid }
     },
 
