@@ -46,8 +46,8 @@ CONFIGVARS.solManUserDetails = [
 		"Files": "Yes",
 		"ModelElements": "Yes",
 		"Collections": "Yes",
-		"BIMPK Upload": "No",
-		"SGPK Upload": "Yes",
+		"BIMPK Upload": "Yes",
+		"SGPK Upload": "No",
 		"Navigator": "Yes"
 	}
 ]
