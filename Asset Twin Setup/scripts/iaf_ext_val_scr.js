@@ -53,26 +53,25 @@ let extval = {
         }, ctx)
         console.log('iaf_dt_model_el_types', iaf_dt_model_el_types)
 
-        let header = [["Revit Category", "Revit Family", "Revit Type", "dtCategory", "dtType"]]
+        //let header = [["Revit Category", "Revit Family", "Revit Type", "dtCategory", "dtType"]]
         let assetTypes = iaf_dt_model_el_types.map(type => {
             //if (type.baType)
-            return [
-                type.properties['Revit Category'].val,
-                type.properties['Revit Family'].val,
-                type.properties['Revit Type'].val,
-                type.dtCategory ? type.dtCategory : '',
-                type.dtType ? type.dtType : '']
+            return {
+                "Revit Category": type.properties['Revit Category'].val,
+                "Revit Family": type.properties['Revit Family'].val,
+                "Revit Type": type.properties['Revit Type'].val,
+                "dtCategory": type.dtCategory ? type.dtCategory : '',
+                "dtType": type.dtType ? type.dtType : ''}
         })
-        let assetTypeAsGrid = header.concat(assetTypes)
-        let sheetArrays = [{ sheetName: "Sheet1", objects: assetTypeAsGrid }]
+        console.log(assetTypes,'assetTypes');
+        
+        let sheetArrays = [{ sheetName: "Sheet1", objects: assetTypes }]
         console.log('shetArrays', sheetArrays)
         
         let relationWorkbook = await UiUtils.IafDataPlugin.createWorkbookFromAoO(sheetArrays);
 
         let savedWorkbook = await UiUtils.IafDataPlugin.saveWorkbook(relationWorkbook,"EasyAssetTwin_BIMTypes.xlsx");
         console.log('savedWorkbook', savedWorkbook)
-
-        return { "bimTypes": assetTypeAsGrid }
     },
 
     //This function is used to export Asset Data from model
