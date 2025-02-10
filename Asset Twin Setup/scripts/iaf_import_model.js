@@ -117,7 +117,7 @@ class BimpkImport {
 			const fileLength = files.length - 1;
 			let index = -1;
 
-			if (bim_model) { //
+			if (bim_model) {
 				console.time(`${this.params.orchRunId}: createBIMCollectionVersion`)
 									await this.#createBIMCollectionVersion();
 				console.timeEnd(`${this.params.orchRunId}: createBIMCollectionVersion`)
@@ -144,14 +144,17 @@ class BimpkImport {
 				IafScriptEngine.getVar("model_geom_file_coll"),
 				IafScriptEngine.getVar("model_geom_views_coll")
 			])
-			let relatedCollections = [model_els_coll._userItemId,
+
+			const relatedCollections = [
+				model_els_coll._userItemId,
 				model_els_props_coll._userItemId,
 				model_type_el_coll._userItemId,
 				data_cache_coll._userItemId,
 				model_geom_file_coll._userItemId,
-				model_geom_views_coll._userItemId]
-
-				console.log("relatedCollections", JSON.stringify(relatedCollections))
+				model_geom_views_coll._userItemId
+			]
+		
+			console.log(`RelatedCollections, orch_run_id: ${this.params.orchRunId}`, relatedCollections)
 
 							await IafScriptEngine.addRelatedCollections({
 									"namedCompositeItemId": bimModelId,
@@ -265,13 +268,13 @@ async #createBIMCollectionVersion() {
 				}
 			}
 			console.log(`Getting collections in composite, bim-model-id: ${bimModel._id}, orch_run_id: ${this.params.orchRunId}`, newModelVer);
-
-			const [modelRelatedCollection] = await Promise.all([
-				IafScriptEngine.getCollectionsInComposite(bimModel._id, null, this.ctx),
-				IafScriptEngine.createNamedUserItemVersion(newModelVer, this.ctx)
-			])
-
+			
+			const modelRelatedCollection = await IafScriptEngine.getCollectionsInComposite(bimModel._id, null, this.ctx)
+			
 			console.log(`modelRelatedCollection, orch_run_id: ${this.params.orchRunId}`, modelRelatedCollection)
+			
+			await IafScriptEngine.createNamedUserItemVersion(newModelVer, this.ctx)
+
 			console.log(`Created BIM Collection Version bim_model version, orch_run_id: ${this.params.orchRunId}`);
 
 			let model_els_coll, model_els_props_coll, model_type_el_coll, model_geom_file_coll, model_geom_views_coll, data_cache_coll;
@@ -570,7 +573,7 @@ async #extractBimpk (fileName, bimBatch, newOccurrence) {
 					"relationships": obj.relationships,
 					"source_id": obj.sourceId,
 					"properties": obj.properties,
-					"source_filename": fileName
+					"source_filename": fileName 
 				})
 				if(objects.length === 1) {
 					console.log(objects[0])

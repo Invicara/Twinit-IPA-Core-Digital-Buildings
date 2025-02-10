@@ -162,7 +162,7 @@ let entass = {
         //let roomVals = input.entityInfo.selectedEntities.map()
         let spaceNumberQueries = input.entityInfo.selectedEntities.map(asset => {
             return {
-                query: { "properties.Number.val": asset.properties["Room Number"].val },
+                query: { "properties.SpaceRel.val": asset.properties["AssetRel"].val },
                 collectionDesc: { _userType: iaf_space_collection._userType, _userItemId: iaf_space_collection._userItemId },
                 options: {
                     page: { getAllItems: true },

@@ -62,7 +62,7 @@ let entspa = {
         console.log('input', input)
         let assetRoomQueries = input.entityInfo.selectedEntities.map(space => {
             return {
-                query: { "properties.Room Number.val": space.properties["Number"].val  },
+                query: { "properties.AssetRel.val": space.properties["SpaceRel"].val  },
                 collectionDesc: { _userType: iaf_asset_collection._userType, _userItemId: iaf_asset_collection._userItemId },
                 options: {
                     page: { getAllItems: true },

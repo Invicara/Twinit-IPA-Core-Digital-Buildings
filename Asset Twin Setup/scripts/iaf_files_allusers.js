@@ -254,37 +254,41 @@ let files = {
         console.log("iaf_asset_collection", iaf_asset_collection)
         console.log('getAssetsForFile INPUT', input)
         let assetQuery = [{
-            parent: {
-                query: { _id: input.entityInfo._id },
-                collectionDesc: { _userType: iaf_ext_files_coll._userType, _userItemId: iaf_ext_files_coll._userItemId },
-                options: { page: { getAllItems: true } },
-                sort: { _id: 1 }
-            },
-            related: [
-                {
-                    relatedDesc: { _relatedUserType: iaf_asset_collection._userType, _isInverse: true },
-                    as: 'AssetInfo'
-                }
-            ]
+          parent: {
+            query: { _id: input.entityInfo._id },
+            collectionDesc: { _userType: iaf_ext_files_coll._userType, _userItemId: iaf_ext_files_coll._userItemId },
+            options: { page: { getAllItems: true } },
+            sort: { _id: 1 }
+          },
+          related: [
+            {
+              relatedDesc: { _relatedUserType: iaf_asset_collection._userType, _isInverse: true },
+              as: 'AssetInfo'
+            }
+          ]
         }]
         let queryResults = await PlatformApi.IafScriptEngine.findWithRelatedMulti(assetQuery, ctx)
         console.log("queryResults", queryResults)
         let assets = queryResults[0]._list[0].AssetInfo._list
         console.log("assets", assets)
+        //return assets
         let assetForTheFile
         let finalAssetForTheFile
-        let header = [["Asset Name", "Mark"]]
+        let header = [["Asset Name", "Revit Category", "Revit Type"]]
         if (assets.length > 0) {
             assetForTheFile = assets.map(asset => [
                 asset['Asset Name'],
-                asset.properties.Mark.val
-            ])
-            finalAssetForTheFile = header.concat(assetForTheFile)
+                asset.properties['Revit Category'].val,
+                asset.properties['Revit Type'].val
+          ])
+          finalAssetForTheFile = header.concat(assetForTheFile)
         } else {
-            finalAssetForTheFile = []
+          finalAssetForTheFile = []
         }
+        console.log(finalAssetForTheFile,'finalAssetForTheFile');
+        
         return finalAssetForTheFile
-    },
+      },
     async editFile(input, libraries, ctx) {
         let { PlatformApi } = libraries
         let iaf_ext_files_coll = await PlatformApi.IafScriptEngine.getVar('iaf_ext_files_coll')

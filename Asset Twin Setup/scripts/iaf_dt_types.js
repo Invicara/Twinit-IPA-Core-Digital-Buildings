@@ -157,7 +157,7 @@ let types = {
                 collectionProject: { _id: 1, _userItemId: 1 },
                 fieldDesc: [
                     {
-                        field: "properties.Space Name.val",
+                        field: "properties.Name.val",
                         count: true
                     }
                 ]
@@ -167,7 +167,7 @@ let types = {
         let distinctNames = await PlatformApi.IafItemSvc.searchRelatedItems(countQuery, ctx)
         console.log("distinctNames", distinctNames)
         // response handling is based on using item service query directly, when we change to script engine, response path should be changed.
-        distinctNames = distinctNames._list[0]._versions[0]._relatedItems['properties.Space Name.val']
+        distinctNames = distinctNames._list[0]._versions[0]._relatedItems['properties.Name.val']
         console.log("distinctNames", distinctNames)
         let sortedDistinctNames = _.sortBy(distinctNames, name => name.value)
         console.log("sortedDistinctNames", sortedDistinctNames)

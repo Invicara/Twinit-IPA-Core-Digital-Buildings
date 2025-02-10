@@ -69,7 +69,7 @@ let extval = {
         
         let relationWorkbook = await UiUtils.IafDataPlugin.createWorkbookFromAoO(sheetArrays);
 
-        let savedWorkbook = await UiUtils.IafDataPlugin.saveWorkbook(relationWorkbook,"devConfig_BIMTypes.xlsx");
+        let savedWorkbook = await UiUtils.IafDataPlugin.saveWorkbook(relationWorkbook,"EasyAssetTwin_BIMTypes.xlsx");
         console.log('savedWorkbook', savedWorkbook)
 
         return { "bimTypes": assetTypeAsGrid }
@@ -189,7 +189,7 @@ let extval = {
         console.log('shetArrays', sheetArrays)
         let relationWorkbook = await UiUtils.IafDataPlugin.createWorkbookFromAoO(sheetArrays)
         console.log('relationWorkbook', relationWorkbook)
-        let savedWorkbook = await UiUtils.IafDataPlugin.saveWorkbook(relationWorkbook,"devConfig_Exported_Assets.xlsx");
+        let savedWorkbook = await UiUtils.IafDataPlugin.saveWorkbook(relationWorkbook,"EasyAssetTwin_Exported_Assets.xlsx");
         console.log('savedWorkbook', savedWorkbook)
     },
 
@@ -215,27 +215,16 @@ let extval = {
                 options: { page: { getAllItems: true, getLatestVersion: true }},
                 sort: { "_id": 1 }
               },
-              relatedFilter: {
-                includeResult: true,
-                $and: [
+              related: [
                     {
-                        relatedDesc: { _relatedUserType: "rvt_type_elements"},
-                        as: 'Revit Type Properties',
-                        query: {$or: [
-                            {"properties.Revit Category.val": "OST_Rooms"},
-                            {"properties.Revit Category.val": "OST_Spaces"},
-                            {"properties.Revit Category.val": "OST_Levels"},
-                            {"properties.Revit Category.val": "OST_Zones"},
-                            {"properties.Revit Category.val": "OST_Areas"},
-                            {"properties.Revit Category.val": "OST_MEPSpaces"}
-                        ]}
+                        relatedDesc: { _relatedUserType: "rvt_type_elements" },
+                        as: 'Revit Type Properties'
                     },
                     {
-                        relatedDesc: {_relatedUserType: "rvt_element_props"},
-                        as: "Revit Element Properties",
+                        relatedDesc: { _relatedUserType: "rvt_element_props" },
+                        as: 'Revit Element Properties'
                     }
                 ]
-            }
         }
         console.log("bim_query", bim_query);     
         let queryResults = await IafScriptEngine.findWithRelatedMulti([bim_query], ctx)
@@ -243,7 +232,7 @@ let extval = {
         let spaceList =  queryResults[0]._list
         console.log("spaceList", spaceList); 
         let reduced = spaceList.map(elem => {
-            return {
+           let result = {
                 revitGuid: elem.source_id,
                 Name:  _.get(elem, "Revit Element Properties._list[0].properties.Name.val"),
                 Number:  _.get(elem, "Revit Element Properties._list[0].properties.Number.val"),
@@ -252,13 +241,26 @@ let extval = {
                 "Revit Category":  _.get(elem, "Revit Type Properties._list[0].properties.Revit Category.val"),
                 "Revit Family":  _.get(elem, "Revit Type Properties._list[0].properties.Revit Family.val")
             }
+            let typeProps = _.get(elem, "Revit Type Properties._list[0].properties")
+            let elemProps = _.get(elem, "Revit Element Properties._list[0].properties")
+
+            for (const property in typeProps) {
+                let key = typeProps[property].dName
+                result[key] = typeProps[property].val
+            }
+
+            for (const property in elemProps) {
+                let key = elemProps[property].dName
+                result[key] = elemProps[property].val
+            }
+            return result
         })
         console.log("reduced", reduced)
         let sheetArrays = [{ sheetName: "Spaces", objects: reduced }]
         console.log('shetArrays', sheetArrays)
         let relationWorkbook = await UiUtils.IafDataPlugin.createWorkbookFromAoO(sheetArrays)
         console.log('relationWorkbook', relationWorkbook)
-        let savedWorkbook = await UiUtils.IafDataPlugin.saveWorkbook(relationWorkbook,"devConfig_Exported_Spaces.xlsx");
+        let savedWorkbook = await UiUtils.IafDataPlugin.saveWorkbook(relationWorkbook,"EasyAssetTwin_Exported_Spaces.xlsx");
         console.log('savedWorkbook', savedWorkbook)
     }
 }

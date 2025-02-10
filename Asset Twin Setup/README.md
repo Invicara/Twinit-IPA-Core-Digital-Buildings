@@ -5,13 +5,15 @@ Objective of Easy Asset Twin project is to setup the project using a single run 
 # How to use
  
 1.Use the config sheet according to requirement.
-2.Add the location of Model (BIMPK or SGPK) file and clientApplicationConfig to get the required scripts and data automatically.
+2.Add the local path for Model, Scripts and Report to get the model,scripts automatically from local path and generate reports.
 3.Create a project using vs code.
 4.Create a script called ProjectSetup, Copy the code from ProjectSetup.js and paste to ProjectSetup.
 5.Run the script EasyAssetTwinSetup, one prompt will be displayed to pick the config file.
 6.Select the config sheet.
-7.Setup will take sometime.
-8.Setup is done.
+7.If BulkUploadFile is yes in import list then it will prompt once more to pick the files as per File List sheet and File List is required.
+8.If AssetFileRelation is yes in import list We have added relation between Assets and Files.Assets and Files sheet is required, Assets, BulkUploadFile and DocumentAttributes should be yes in import list to create relation.
+9.Setup will take sometime.
+10.Setup is done.
 
 
  # How to use update script
